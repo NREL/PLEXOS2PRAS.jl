@@ -20,10 +20,10 @@ __Step 2: Run the pre-PRAS worksheet modification utility__
 Once you have your PLEXOS system in an Excel workbook, copy the file into this directory run the workbook modification script:
 
 ```
-plexos2pras process-workbook yourworkbookname.xlsx
+process-workbook yourworkbookname.xlsx yourworkbookname_PRAS.xlsx
 ```
 
-This will create a new workbook file (based on the example above it would be called `yourworkbookname_PRAS.xlsx`) with changes to the system and output settings that are compatible with importing to PRAS. Note that if need be, you can also apply these changes manually in the PLEXOS GUI, and skip steps 1-3 here. For details, consult the [worksheet modification reference](worksheet_modification.md).
+This will create a new workbook file called `yourworkbookname_PRAS.xlsx` with changes to the system and output settings that are compatible with importing to PRAS. Note that if need be, you can also apply these changes manually in the PLEXOS GUI, and skip steps 1-3 here. For details, consult the [worksheet modification reference](worksheet_modification.md).
 
 __Step 3: Import the modified system back into PLEXOS__
 
@@ -38,12 +38,12 @@ __Step 5: Run the solution processor utility__
 Once you have results for all of the Models you want to represent in PRAS, run the solution processing script to convert them all to JLD files. Run this in the same folder as your XML database - the script will automatically find the relevant solution files, run `h5plexos` on them, convert the HDF5 files to RAS systems, and save the systems into a JLD file:
 
 ```
-plexos2pras process-solutions --nprocs 4 PRAS_systems.jld
+process-solutions --nprocs 4 . PRAS_systems.jld
 ```
 
 In the above example, the `--nprocs 4` defines the max number of solutions to be processed in parallel. If you have more than four solutions to process, have more than four logical cores on your machine, and can afford to use extra memory, you can increase the number to something higher.
 
-__Step 5: Load into PRAS__
+__Step 6: Load into PRAS__
 
 You can now run PRAS as you normally would. After loading the `ResourceAdequacy` module in Julia, use the `JLD2` package to load in the systems from disk:
 
