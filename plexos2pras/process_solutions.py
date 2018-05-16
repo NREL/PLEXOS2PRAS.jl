@@ -5,10 +5,11 @@ import re
 def process_solutions(inputdir, outputfile, nprocs, suffix):
     pass
 
+
 def _process_solutions(args=None):
 
     if args is None:
-        args = sys.argv
+        args = sys.argv[1:]
 
     argparser = argparse.ArgumentParser(prog="process-solutions")
     argparser.add_argument(

@@ -9,7 +9,7 @@ def process_workbook(infile, outfile, suffix):
 def _process_workbook(args=None):
 
     if args is None:
-        args = sys.argv
+        args = sys.argv[1:]
 
     argparser = argparse.ArgumentParser(prog="process-workbook")
     argparser.add_argument(
@@ -17,7 +17,7 @@ def _process_workbook(args=None):
         help="Name of the input Excel workbook"
     )
     argparser.add_argument(
-        "outputfile",
+        "outputfile", nargs='?',
         help="Name of the output Excel workbook containing the modified " +
         "system / models"
     )
@@ -32,8 +32,8 @@ def _process_workbook(args=None):
         outputfile = args.outputfile
 
     else:
-        infile_re = re.match("(.+)\.(.+)", args.inputfile)
-        outputfile = infile_re[1] + args.suffix + "." + inputfile_re[2]
+        inputfile_re = re.match("(.+)\.(.+)", args.inputfile)
+        outputfile = inputfile_re[1] + "_" + args.suffix + "." + inputfile_re[2]
 
     print(args.inputfile, outputfile, args.suffix)
     process_workbook(args.inputfile, outputfile, args.suffix)
