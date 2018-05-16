@@ -15,7 +15,7 @@ The worksheet modification utility creates a copy of the input database with the
 - A new Report object is created and associated with every Model. The new Report outputs the following properties for the Interval time period:
 
     - Region: Load
-	- Region.Region: Available Transfer Capacity
+	- Region.Regions: Available Transfer Capacity
     - Generator: Available Capacity
     - Generator: x (FOR)
     - Generator: y (MTTR)

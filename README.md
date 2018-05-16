@@ -1,4 +1,4 @@
-# PLEXOS2RAS
+# PLEXOS2PRAS
 
 This repository provides tools to allow power system models formulated for PLEXOS to be read into NREL's Probabilistic Resource Adequacy Suite (PRAS). PLEXOS model specifications can be very complicated, so unfortunately the process for mapping them to PRAS inputs can be a bit involved as well! The following workflow aims to minimize the effort required:
 
@@ -35,13 +35,13 @@ Run the relevant PLEXOS models (either via the GUI or CLI). The runs should fini
 
 __Step 5: Run the solution processor utility__
 
-Once you have results for all of the Models you want to represent in PRAS, run the solution processing script to convert them all to JLD files. Run this in the same folder as your XML database - the script will automatically find the relevant solution files, run `h5plexos` on them, convert the HDF5 files to RAS systems, and save the systems into a JLD file in your current folder:
+Once you have results for all of the Models you want to represent in PRAS, run the solution processing script to convert them all to JLD files. Run this in the same folder as your XML database - the script will automatically find the relevant solution files, run `h5plexos` on them, convert the HDF5 files to RAS systems, and save the systems into a JLD file:
 
 ```
-plexos2pras process-solutions 4
+plexos2pras process-solutions --nprocs 4 PRAS_systems.jld
 ```
 
-In the above example, the `4` defines the max number of solutions to be processed in parallel. If you have more than four solutions to process, have more than four logical cores on your machine, and can afford to use extra memory, you can increase the number to something higher.
+In the above example, the `--nprocs 4` defines the max number of solutions to be processed in parallel. If you have more than four solutions to process, have more than four logical cores on your machine, and can afford to use extra memory, you can increase the number to something higher.
 
 __Step 5: Load into PRAS__
 
