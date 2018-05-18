@@ -1,9 +1,10 @@
 import sys
 import argparse
 import re
+from os import path
 
 def process_workbook(infile, outfile, suffix):
-    pass
+    print(infile, outfile, suffix)
 
 
 def _process_workbook(args=None):
@@ -32,10 +33,9 @@ def _process_workbook(args=None):
         outputfile = args.outputfile
 
     else:
-        inputfile_re = re.match("(.+)\.(.+)", args.inputfile)
-        outputfile = inputfile_re[1] + "_" + args.suffix + "." + inputfile_re[2]
+        filepath, fileextension = path.splitext(args.inputfile)
+        outputfile = filepath + "_" + args.suffix + "." + fileextension
 
-    print(args.inputfile, outputfile, args.suffix)
     process_workbook(args.inputfile, outputfile, args.suffix)
 
 

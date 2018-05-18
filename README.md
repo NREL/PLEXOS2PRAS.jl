@@ -31,11 +31,13 @@ Import the modified system (`yourworkbookname_PRAS.xlsx` from the above example)
 
 __Step 4: Run the PLEXOS Models that you want to import into PRAS__
 
-Run the relevant PLEXOS models (either via the GUI or CLI). The runs should finish much faster than normal since they're being executed in "dry run" mode, without solving for any decision variables. PRAS only needs PLEXOS' definition of certain constraints.
+Run the relevant PLEXOS models (either via the GUI or CLI). The runs should finish much faster than normal since they're being executed in "dry run" mode, without solving for any decision variables. PRAS only needs PLEXOS' definition of certain inputs and constraints.
+
+At this point, you can open the solution in the PLEXOS GUI and confirm that the results match your expectations. You can manually fine-tune properties in the newly-created database and re-run specific Models if you find elements that are unsatisfactory.
 
 __Step 5: Run the solution processor utility__
 
-Once you have results for all of the Models you want to represent in PRAS, run the solution processing script to convert them all to JLD files. Run this in the same folder as your XML database - the script will automatically find the relevant solution files, run `h5plexos` on them, convert the HDF5 files to RAS systems, and save the systems into a JLD file:
+Once you have results for all of the Models you want to represent in PRAS, run the solution processing script to convert them all to JLD files. Run this in the same folder as your XML database - the script will automatically find the relevant solution files, run `h5plexos` on them, convert the HDF5 files to RAS systems, and save all of the systems into a single JLD file:
 
 ```
 process-solutions --nprocs 4 . PRAS_systems.jld
