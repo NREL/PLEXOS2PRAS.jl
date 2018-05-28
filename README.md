@@ -17,7 +17,7 @@ If you only have the XML database file, you'll need to export your database via 
 
 __Step 2: Run the pre-PRAS worksheet modification utility__
 
-Once you have your PLEXOS system in an Excel workbook, copy the file into this directory run the workbook modification script:
+Once you have your PLEXOS system in an Excel workbook, run the workbook modification script on the file:
 
 ```
 process-workbook yourworkbookname.xlsx yourworkbookname_PRAS.xlsx
@@ -27,7 +27,7 @@ This will create a new workbook file called `yourworkbookname_PRAS.xlsx` with ch
 
 __Step 3: Import the modified system back into PLEXOS__
 
-Import the modified system (`yourworkbookname_PRAS.xlsx` from the above example) into PLEXOS as you normally would.
+Import the modified system (`yourworkbookname_PRAS.xlsx` from the above example) into PLEXOS as you normally would. As with a normal import, you may want to use an empty template file.
 
 __Step 4: Run the PLEXOS Models that you want to import into PRAS__
 
