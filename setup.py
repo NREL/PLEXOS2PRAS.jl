@@ -5,8 +5,8 @@ setup(name='plexos2pras',
       packages=['plexos2pras'],
       entry_points={
           'console_scripts': [
-              'process-workbook = plexos2pras.process_workbook:process_workbook',
-              'process-solutions = plexos2pras.process_solutions:process_solutions',
+              'process-workbook = plexos2pras.process_workbook:_process_workbook',
+              'process-solutions = plexos2pras.process_solutions:_process_solutions',
           ]
       },
       )
