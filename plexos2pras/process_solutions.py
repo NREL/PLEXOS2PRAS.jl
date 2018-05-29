@@ -22,7 +22,7 @@ def changeextension(filepath, newextension, suffix=None):
     return filepath
 
 
-def process_solution(zipinputpath, jldoutputpath):
+def process_solution(zipinputpath, jldoutputpath, suffix):
 
     h5outputpath = changeextension(zipinputpath, "h5", suffix="temp")
 
@@ -31,7 +31,7 @@ def process_solution(zipinputpath, jldoutputpath):
 
     # Convert H5 solution to JLD PRAS data
     subprocess.run(
-        ["julia", scriptpath("generate_jld.jl"), h5outputpath, jldoutputpath],
+        ["julia", scriptpath("generate_jld.jl"), h5outputpath, jldoutputpath, suffix],
         check=True)
 
     # Remove H5 solution
@@ -50,7 +50,7 @@ def process_solutions(inputdir, outputfile, nproc, suffix):
 
     # Generate JLD filenames and files
     filepaths = [
-        (zippath, changeextension(zippath, "jld", suffix="temp"))
+        (zippath, changeextension(zippath, "jld", suffix="temp"), suffix)
         for zippath in filepaths]
     suffix += "_temp"
     with Pool(processes=nproc) as pool:

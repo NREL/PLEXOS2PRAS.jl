@@ -4,6 +4,13 @@ function extract_modelname(filename::String,
 
     rgx = Regex(".*Model (.+)_" * suffix * " Solution.*")
     result = match(rgx, filename)
-    return result isa Void ? default : result.captures[1]
+
+    if result isa Void
+        warn("Could not determine PLEXOS model name from filename $filename," *
+             "falling back on default '$default'")
+        return  default
+    else
+        return result.captures[1]
+    end
 
 end
