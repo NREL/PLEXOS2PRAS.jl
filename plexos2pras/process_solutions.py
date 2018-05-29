@@ -4,7 +4,7 @@ import os
 from glob import glob
 import subprocess
 from multiprocessing import Pool
-from h5plexos.process import process_solution
+from h5plexos.process import process_solution as process_to_h5
 
 def scriptpath(scriptname):
     return os.path.join(os.path.dirname(__file__), scriptname)
@@ -26,31 +26,34 @@ def process_solution(zipinputpath, jldoutputpath):
 
     h5outputpath = changeextension(zipinputpath, "h5", suffix="temp")
 
-    process_solution(zipinputpath, h5outputpath).close()
+    # Convert zip solution to H5 solution
+    process_to_h5(zipinputpath, h5outputpath).close()
+
+    # Convert H5 solution to JLD PRAS data
     subprocess.run(
         ["julia", scriptpath("generate_jld.jl"), h5outputpath, jldoutputpath],
-        check=True
-    )
+        check=True)
+
+    # Remove H5 solution
     os.remove(h5outputpath)
 
     return jldoutputpath
 
 
-def process_solutions(inputdir, outputfile, nprocs, suffix):
+def process_solutions(inputdir, outputfile, nproc, suffix):
     "Assumes zip files names are in the standard Model {modelname} Solution.zip format"
-
-    print(inputdir, outfile, nprocs, suffix)
 
     # Find relevant solutions and report that they're being processed
     filepaths = glob("**/Model *_" + suffix + " Solution.zip", recursive=True)
     print(len(filepaths), " solution files will be processed:\n",
-          "\n".join(filepaths))
+          "\n".join(filepaths), sep="")
 
+    # Generate JLD filenames and files
     filepaths = [
         (zippath, changeextension(zippath, "jld", suffix="temp"))
         for zippath in filepaths]
     suffix += "_temp"
-    with Pool(processes=nprocs) as pool:
+    with Pool(processes=nproc) as pool:
         jldpaths = pool.starmap(process_solution, filepaths)
 
     # Collect JLD filepaths and run consolidation script
