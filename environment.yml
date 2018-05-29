@@ -1,4 +1,6 @@
 name: plexos2pras
+channels:
+  - conda-forge
 dependencies:
   - python=3
   - h5py
