@@ -1,4 +1,5 @@
 using ResourceAdequacy
+using Distributions
 using HDF5
 using JLD
 
@@ -10,13 +11,13 @@ function aggregate_regionally(available_capacity::Matrix{T},
                               regions::Vector{Int},
                               isvgs::Vector{Bool}) where T
 
-    n_regions = length(unique(region))
+    n_regions = length(unique(regions))
 
-    vgprofiles = zeros(T, size(data,1), n_regions)
+    vgprofiles = zeros(T, size(available_capacity, 1), n_regions)
     dispcaps = fill(Int[], n_regions)
     dispors = fill(T[], n_regions)
 
-    for (i, (region, isvg)) in enumerate(zip(regions, isvgs))
+    for (i, (r, isvg)) in enumerate(zip(regions, isvgs))
         if isvg
             vgprofiles[:, r] .+= available_capacity[:, i]
         else
@@ -25,7 +26,9 @@ function aggregate_regionally(available_capacity::Matrix{T},
         end
     end
 
-    dispdistrs = ResourceAdequacy.spconv.(dispcaps, dispors)
+    dispdistrs = [Generic(Vector{Float64}(support(dist)),
+                          Distributions.probs(dist))
+                  for dist in ResourceAdequacy.spconv.(dispcaps, dispors)]
     return vgprofiles, dispdistrs
 
 end
@@ -35,15 +38,23 @@ inputpath_h5 = ARGS[1]
 outputpath_jld = ARGS[2]
 suffix = ARGS[3]
 vg_categories = length(ARGS) > 3 ? ARGS[4:end] : String[]
+
 systemname = extract_modelname(inputpath_h5, suffix)
 
-vgcat(x::String) = x in vg_categories
+vgcategory(x::String) = x in vg_categories
 
-# TODO: Would be nice to check that the nessecary properties
+# TODO: Would be nice to check that the necessary properties
 # are reported before starting to load things in
 
-timestamps, generators, region_regions = load_metadata(inputpath_h5)
-generators[:VG] = vgcat.(generators[:GeneratorCategory])
+tstamps, generators, region_regions = load_metadata(inputpath_h5)
+generators[:VG] = vgcategory.(generators[:GeneratorCategory])
+
+#TODO: Support importing arbitrary interval lengths from PLEXOS
+if tstamps[1] + Hour(1) != tstamps[2]
+    warn("The importer currently assumes your PLEXOS intervals are hourly" *
+         " but this doesn't seem to be the case with your data. Time-related" *
+         " reliability metrics and units will likely be incorrect.")
+end
 
 h5open(inputpath_h5, "r") do h5file
 
@@ -57,38 +68,61 @@ h5open(inputpath_h5, "r") do h5file
     transfers = load_singlebanddata(
         h5file,
         "data/ST/interval/region_regions/Available Transfer Capability")
-    # Static flow bounds for now
-    region_regions[:TransferLimit] = collect(transfers[1,:])
 
-    #TODO: Verify parallel flow, eliminate duplicates, and extract labels / limits
-    display(region_regions)
+    region_regions[:TransferLimit] = collect(transfers[1,:]) # Static flow bounds for now
+
+    region_regions[:EdgeLabel] = map((pi,ci) -> (min(pi, ci), max(pi, ci)),
+                                     region_regions[:ParentRegionIdx],
+                                     region_regions[:ChildRegionIdx])
+
+    edges = by(region_regions, :EdgeLabel) do d::AbstractDataFrame
+
+        if size(d,1) != 2
+            label = d[1, :EdgeLabel]
+            label[1] == label[2] && return DataFrame() # Ignore self-transfer data
+            error("Unexpected line flow data: $d") # Non self-transfers should only ever have 2 flows
+        end
+
+        limit1 = d[1, :TransferLimit]
+        limit2 = d[2, :TransferLimit]
+
+        if limit1 == limit2
+            return DataFrame(TransferLimit=limit1) # Symmetrical constraints
+        else
+            region1 = d[1, :ParentRegion]
+            region2 = d[2, :ParentRegion]
+            warn("Asymmetrical transfer limits between $region1 and $region2" *
+                    "($limit1 and $limit2). Using the lower of the two values.")
+            return DataFrame(TransferLimit=min(limit1, limit2))
+        end
+    end
+
+    edgelabels = Vector{Tuple{Int,Int}}(edges[:EdgeLabel])
+    edgedistrs = [Generic(Float64[l], [1.]) for l in edges[:TransferLimit]]
 
     # Generator Data
 
-    available_capacity = round(Int, load_singlebanddata(
-        h5file, "data/ST/interval/generator/Available Capacity"))
-    outagerate = loadsinglebanddata(
+    outagerate = load_singlebanddata(
         h5file, "data/ST/interval/generator/x") ./ 100
 
-    vgprofiles, dispdistrs = regional_aggregation(
+    keep_periods = .!isnan.(outagerate[:, 1])
+
+    timestamps = tstamps[keep_periods]
+    outagerate = outagerate[keep_periods, :]
+    available_capacity = load_singlebanddata(
+        h5file, "data/ST/interval/generator/Available Capacity")[keep_periods, :]
+
+    vgprofiles, dispdistrs = aggregate_regionally(
         available_capacity, outagerate,
-        generators[:RegionIdx], generators[:VG])
+        Vector(generators[:RegionIdx]), Vector(generators[:VG]))
 
-    display(vgprofiles)
-    display(dispdistrs)
+    n = length(timestamps)
 
-    # Create and persist the RAS representation of the system
-    # Need:
-    # - Vector of timestamps - ok
-    # - Dispatchable distr per region - ok
-    # - VG profile per region - ok
-    # - Edge labels
-    # - Edge distributions
-    # - Load - ok
-
-    system = ResourceAdequacy.SystemDistributionSet{}(
+    system = ResourceAdequacy.SystemDistributionSet{
+        1,Hour,n,Hour,MW,Float64}(
         timestamps, dispdistrs, vgprofiles,
-        _, _, loaddata)
+        edgelabels, edgedistrs, loaddata, 10, 1)
+
     save(outputpath_jld, systemname, system)
 
 end
