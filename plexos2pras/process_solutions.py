@@ -44,7 +44,8 @@ def process_solutions(inputdir, outputfile, nproc, suffix):
     "Assumes zip files names are in the standard Model {modelname} Solution.zip format"
 
     # Find relevant solutions and report that they're being processed
-    filepaths = glob("**/Model *_" + suffix + " Solution.zip", recursive=True)
+    filepaths = glob(os.path.join(inputdir, "**/Model *_" + suffix + " Solution.zip"),
+                     recursive=True)
     print(len(filepaths), " solution files will be processed:\n",
           "\n".join(filepaths), sep="")
 
@@ -52,7 +53,7 @@ def process_solutions(inputdir, outputfile, nproc, suffix):
     filepaths = [
         (zippath, changeextension(zippath, "jld", suffix="temp"), suffix)
         for zippath in filepaths]
-    suffix += "_temp"
+
     with Pool(processes=nproc) as pool:
         jldpaths = pool.starmap(process_solution, filepaths)
 

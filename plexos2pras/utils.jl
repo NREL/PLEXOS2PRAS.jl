@@ -6,7 +6,7 @@ function extract_modelname(filename::String,
     result = match(rgx, filename)
 
     if result isa Void
-        warn("Could not determine PLEXOS model name from filename $filename," *
+        warn("Could not determine PLEXOS model name from filename $filename, " *
              "falling back on default '$default'")
         return  default
     else

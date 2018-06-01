@@ -6,6 +6,7 @@ include("utils.jl")
 outputpath = ARGS[1]
 suffix = ARGS[2]
 inputpaths = ARGS[3:end]
+
 systemnames = extract_modelname.(inputpaths, suffix)
 
 jldopen(outputpath, "w") do file
@@ -16,6 +17,7 @@ jldopen(outputpath, "w") do file
 
         system = load(inputpath)[systemname]
         write(file, systemname, system)
+        rm(inputpath)
 
     end
 
