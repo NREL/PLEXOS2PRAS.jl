@@ -79,7 +79,7 @@ h5open(inputpath_h5, "r") do h5file
 
         if size(d,1) != 2
             label = d[1, :EdgeLabel]
-            label[1] == label[2] && return DataFrame() # Ignore self-transfer data
+            label[1] == label[2] && return DataFrame(TransferLimit=[]) # Ignore self-transfer data
             error("Unexpected line flow data: $d") # Non self-transfers should only ever have 2 flows
         end
 
@@ -111,7 +111,7 @@ h5open(inputpath_h5, "r") do h5file
     outagerate = outagerate[keep_periods, :]
     available_capacity = load_singlebanddata(
         h5file, "data/ST/interval/generator/Available Capacity")[keep_periods, :]
-
+    loaddata = loaddata[keep_periods, :]
     vgprofiles, dispdistrs = aggregate_regionally(
         available_capacity, outagerate,
         Vector(generators[:RegionIdx]), Vector(generators[:VG]))
