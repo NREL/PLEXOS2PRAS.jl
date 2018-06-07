@@ -13,13 +13,13 @@ function aggregate_regionally(available_capacity::Matrix{T},
 
     n_regions = length(unique(regions))
 
-    vgprofiles = zeros(T, size(available_capacity, 1), n_regions)
+    vgprofiles = zeros(T, n_regions, size(available_capacity, 1))
     dispcaps = fill(Int[], n_regions)
     dispors = fill(T[], n_regions)
 
     for (i, (r, isvg)) in enumerate(zip(regions, isvgs))
         if isvg
-            vgprofiles[:, r] .+= available_capacity[:, i]
+            vgprofiles[r, :] .+= available_capacity[:, i]
         else
             push!(dispcaps[r], round(Int, available_capacity[1, i]))
             push!(dispors[r], outage_rate[1, i])
@@ -111,7 +111,7 @@ h5open(inputpath_h5, "r") do h5file
     outagerate = outagerate[keep_periods, :]
     available_capacity = load_singlebanddata(
         h5file, "data/ST/interval/generator/Available Capacity")[keep_periods, :]
-    loaddata = loaddata[keep_periods, :]
+    loaddata = loaddata[keep_periods, :]'
     vgprofiles, dispdistrs = aggregate_regionally(
         available_capacity, outagerate,
         Vector(generators[:RegionIdx]), Vector(generators[:VG]))
