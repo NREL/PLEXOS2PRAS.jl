@@ -66,7 +66,7 @@ function load_metadata(inputpath_h5::String)
 
         region_regions = join(region_regions, parentregions, on=:ParentRegion)
         region_regions = join(region_regions, childregions, on=:ChildRegion)
-        sort!(region_regions, cols=:RRIdx)
+        sort!(region_regions, :RRIdx)
 
         return timestamps, generators, region_regions
 
