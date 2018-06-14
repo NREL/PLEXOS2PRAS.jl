@@ -2,17 +2,16 @@ using ResourceAdequacy
 using Distributions
 using HDF5
 using JLD
-using StatsBase
 
 include("utils.jl")
 include("loadh5.jl")
 
-function aggregate_regionally(available_capacity::Matrix{T},
+function aggregate_regionally(n_regions::Int,
+                              available_capacity::Matrix{T},
                               outage_rate::Matrix{T},
                               regions::Vector{Int},
                               isvgs::Vector{Bool}) where T
 
-    n_regions = maximum(regions)
     vgprofiles = zeros(T, n_regions, size(available_capacity, 1))
     dispcaps = [Int[] for _ in 1:n_regions]
     dispors = [T[] for _ in 1:n_regions]
@@ -119,7 +118,7 @@ h5open(inputpath_h5, "r") do h5file
     available_capacity = load_singlebanddata(
         h5file, "data/ST/interval/generator/Available Capacity")[keep_periods, :]
     loaddata = loaddata[keep_periods, :]'
-    vgprofiles, dispdistrs = aggregate_regionally(
+    vgprofiles, dispdistrs = aggregate_regionally(n_regions,
         available_capacity, outagerate,
         Vector(generators[:RegionIdx]), Vector(generators[:VG]))
 

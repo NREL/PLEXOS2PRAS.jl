@@ -5,7 +5,7 @@ using PyCall
 @pyimport h5py
 
 function meta_dataframe(h5file::PyObject, path::String,
-                        columns::Vector{Symbol}=Symbol[]::DataFrame)
+                        columns::Vector{Symbol}=Symbol[])::DataFrame
 
     h5dset = get(h5file, path)
     colnames = collect(h5dset[:dtype][:names])
@@ -33,7 +33,7 @@ function load_metadata(inputpath_h5::String)
         regions = meta_dataframe(h5file,
                                 "metadata/objects/region",
                                 [:Region, :RegionCategory, :RegionIdx])
-                                
+
         # Generation
         generators = meta_dataframe(h5file,
                                     "metadata/objects/generator",
