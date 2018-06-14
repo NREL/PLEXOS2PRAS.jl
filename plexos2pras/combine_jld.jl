@@ -12,9 +12,7 @@ systemnames = extract_modelname.(inputpaths, suffix)
 jldopen(outputpath, "w") do file
 
     addrequire(file, ResourceAdequacy)
-
     for (inputpath, systemname) in zip(inputpaths, systemnames)
-
         system = load(inputpath)[systemname]
         write(file, systemname, system)
         rm(inputpath)

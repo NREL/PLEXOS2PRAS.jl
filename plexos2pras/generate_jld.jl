@@ -2,6 +2,7 @@ using ResourceAdequacy
 using Distributions
 using HDF5
 using JLD
+using StatsBase
 
 include("utils.jl")
 include("loadh5.jl")
@@ -11,24 +12,30 @@ function aggregate_regionally(available_capacity::Matrix{T},
                               regions::Vector{Int},
                               isvgs::Vector{Bool}) where T
 
-    n_regions = length(unique(regions))
-
+    n_regions = maximum(regions)
     vgprofiles = zeros(T, n_regions, size(available_capacity, 1))
-    dispcaps = fill(Int[], n_regions)
-    dispors = fill(T[], n_regions)
+    dispcaps = [Int[] for _ in 1:n_regions]
+    dispors = [T[] for _ in 1:n_regions]
 
     for (i, (r, isvg)) in enumerate(zip(regions, isvgs))
         if isvg
             vgprofiles[r, :] .+= available_capacity[:, i]
         else
             push!(dispcaps[r], round(Int, available_capacity[1, i]))
-            push!(dispors[r], outage_rate[1, i])
+            push!(dispors[r], 1.-outage_rate[1, i]./100)
         end
     end
 
-    dispdistrs = [Generic(Vector{Float64}(support(dist)),
-                          Distributions.probs(dist))
-                  for dist in ResourceAdequacy.spconv.(dispcaps, dispors)]
+    dispdistrs = Vector{Generic{Float64,Float64,Vector{Float64}}}(n_regions)
+    for (i, (dispcap, dispor)) in enumerate(zip(dispcaps, dispors))
+        if length(dispcap) == 0
+            dispdistrs[i] = Generic([0.],[1.])
+        else
+            dist = ResourceAdequacy.spconv(dispcap, dispor)
+            dispdistrs[i] = Generic(Vector{Float64}(support(dist)), Distributions.probs(dist))
+        end
+    end
+
     return vgprofiles, dispdistrs
 
 end
