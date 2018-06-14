@@ -118,8 +118,8 @@ h5open(inputpath_h5, "r") do h5file
     available_capacity = load_singlebanddata(
         h5file, "data/ST/interval/generator/Available Capacity")[keep_periods, :]
     loaddata = loaddata[keep_periods, :]'
-    vgprofiles, dispdistrs = aggregate_regionally(n_regions,
-        available_capacity, outagerate,
+    vgprofiles, dispdistrs = aggregate_regionally(
+        n_regions, available_capacity, outagerate,
         Vector(generators[:RegionIdx]), Vector(generators[:VG]))
 
     n = length(timestamps)

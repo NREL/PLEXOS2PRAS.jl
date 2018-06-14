@@ -17,7 +17,6 @@ jldopen(outputpath, "w") do file
         system = load(inputpath)[systemname]
         write(file, systemname, system)
         rm(inputpath)
-
     end
 
 end
