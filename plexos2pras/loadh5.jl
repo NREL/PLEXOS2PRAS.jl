@@ -27,7 +27,7 @@ function load_metadata(inputpath_h5::String)
 
         # Load timestamps
         timestamps = Array{String}(
-            np.array(get(h5file, "metadata/times/ST")))
+            np.array(get(h5file, "metadata/times/interval")))
         timestamps = DateTime.(timestamps, dateformat"d/m/y H:M:S")
 
         regions = meta_dataframe(h5file,
