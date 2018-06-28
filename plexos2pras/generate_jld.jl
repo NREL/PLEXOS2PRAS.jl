@@ -93,7 +93,9 @@ h5open(inputpath_h5, "r") do h5file
         limit2 = d[2, :TransferLimit]
 
         if limit1 == limit2
-            return DataFrame(TransferLimit=limit1) # Symmetrical constraints
+            return limit1 > 0. ?
+                DataFrame(TransferLimit=limit1) : # Symmetrical constraints
+                DataFrame(TransferLimit=[]) # No actual connection , ignore
         else
             region1 = d[1, :ParentRegion]
             region2 = d[2, :ParentRegion]
