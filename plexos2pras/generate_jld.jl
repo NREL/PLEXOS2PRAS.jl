@@ -52,7 +52,7 @@ vgcategory(x::String) = x in vg_categories
 # TODO: Would be nice to check that the necessary properties
 # are reported before starting to load things in
 
-tstamps, generators, region_regions = load_metadata(inputpath_h5)
+tstamps, generators, regions, region_regions = load_metadata(inputpath_h5)
 generators[:VG] = vgcategory.(generators[:GeneratorCategory])
 
 #TODO: Support importing arbitrary interval lengths from PLEXOS
@@ -67,7 +67,12 @@ h5open(inputpath_h5, "r") do h5file
     # Load Data
 
     loaddata = load_singlebanddata(h5file, "data/ST/interval/region/Load")
-    n_regions = size(loaddata, 2)
+    regions = unique(regions_regions[[:ParentRegion, :ParentRegionIdx]], :ParentRegionIdx)
+    sort!(regions, :ParentRegionIdx)
+    regionnames = regions[:ParentRegion]
+
+    n_regions = length(regions)
+    @assert n_regions == size(loaddata, 2)
 
     # Transmission Data
 
@@ -127,9 +132,9 @@ h5open(inputpath_h5, "r") do h5file
     n = length(timestamps)
 
     system = ResourceAdequacy.SystemDistributionSet{
-        1,Hour,n,Hour,MW,Float64}(
-        timestamps, dispdistrs, vgprofiles,
-        edgelabels, edgedistrs, loaddata, 10, 1)
+        1,Hour,n,Hour,MW}(
+        timestamps, regionnames, dispdistrs, vgprofiles,
+        edgelabels, edgedistrs, loaddata)
 
     save(outputpath_jld, systemname, system)
 
