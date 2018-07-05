@@ -52,7 +52,7 @@ vgcategory(x::String) = x in vg_categories
 # TODO: Would be nice to check that the necessary properties
 # are reported before starting to load things in
 
-tstamps, generators, regions, region_regions = load_metadata(inputpath_h5)
+tstamps, generators, region_regions = load_metadata(inputpath_h5)
 generators[:VG] = vgcategory.(generators[:GeneratorCategory])
 
 #TODO: Support importing arbitrary interval lengths from PLEXOS
