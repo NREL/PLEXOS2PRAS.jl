@@ -4,10 +4,18 @@ This repository provides tools to allow power system models formulated for PLEXO
 
 __Step 0: Prepare your environment__
 
-This will ensure your environment is ready to run both the PLEXOS import tools and PRAS (this means you can skip the PRAS standalone installation instructions).
+This will ensure your environment is ready to run both the PLEXOS import tools and PRAS (this means you can skip the PRAS standalone installation instructions). Download the `environment.yml` file from the root of this repository and create/update a conda environment with:
 
- - Peregrine quick-install
- - Manual install
+```sh
+conda env update -f environment.yml
+```
+ 
+Once in that environment, you'll also need to install the following Julia packages manually:
+ 
+ - HDF5
+ - JLD
+ - DataFrames
+ - PyCall
 
 __Step 1: Represent your PLEXOS system in the Excel workbook format__
 
