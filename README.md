@@ -37,7 +37,7 @@ At this point, you can open the solution in the PLEXOS GUI and confirm that the 
 
 __Step 5: Run the solution processor utility__
 
-Once you have results for all of the Models you want to represent in PRAS, run the solution processing script to convert them all to JLD files. Run this in the same folder as your XML database - the script will automatically find the relevant solution files, run `h5plexos` on them, convert the HDF5 files to RAS systems, and save all of the systems into a single JLD file:
+Once you have results for all of the Models you want to represent in PRAS, run the solution processing script to convert them all to JLD files. Run this in the same folder as your XML database - the script will automatically find the relevant solution files, run `h5plexos` on them, convert the HDF5 files to PRAS systems, and save all of the systems into a single JLD file:
 
 ```
 process-solutions --nprocs 4 . PRAS_systems.jld
@@ -47,11 +47,11 @@ In the above example, the `--nprocs 4` defines the max number of solutions to be
 
 __Step 6: Load into PRAS__
 
-You can now run PRAS as you normally would. After loading the `ResourceAdequacy` module in Julia, use the `JLD2` package to load in the systems from disk:
+You can now run PRAS as you normally would. After loading the `ResourceAdequacy` module in Julia, use the `JLD` package to load in the systems from disk:
 
 ```julia
 using ResourceAdequacy
-using JLD2
+using JLD
 
 # Load in the systems
 systems = load("PRAS_systems.jld")
@@ -59,5 +59,5 @@ model1system = systems["model1"]
 model2system = systems["model2"]
 
 # Assess the reliability of a system
-assess(REPRA(1,10), NetworkFlow(100_000), model1system)
+assess(REPRA(1,10), NonSequentialNetworkFlow(100_000), MinimalResult(), model1system)
 ```
