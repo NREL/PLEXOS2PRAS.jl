@@ -67,7 +67,12 @@ h5open(inputpath_h5, "r") do h5file
     # Load Data
 
     loaddata = load_singlebanddata(h5file, "data/ST/interval/region/Load")
-    n_regions = size(loaddata, 2)
+    regions = unique(region_regions[[:ParentRegion, :ParentRegionIdx]], :ParentRegionIdx)
+    sort!(regions, :ParentRegionIdx)
+    regionnames = regions[:ParentRegion]
+
+    n_regions = length(regionnames)
+    @assert n_regions == size(loaddata, 2)
 
     # Transmission Data
 
@@ -127,9 +132,9 @@ h5open(inputpath_h5, "r") do h5file
     n = length(timestamps)
 
     system = ResourceAdequacy.SystemDistributionSet{
-        1,Hour,n,Hour,MW,Float64}(
-        timestamps, dispdistrs, vgprofiles,
-        edgelabels, edgedistrs, loaddata, 10, 1)
+        1,Hour,n,Hour,MW,MWh}(
+        timestamps, regionnames, dispdistrs, vgprofiles,
+        edgelabels, edgedistrs, loaddata)
 
     save(outputpath_jld, systemname, system)
 

@@ -22,7 +22,7 @@ def changeextension(filepath, newextension, suffix=None):
     return filepath
 
 
-def process_solution(zipinputpath, jldoutputpath, suffix):
+def process_solution(zipinputpath, jldoutputpath, suffix, vgcats):
 
     h5outputpath = changeextension(zipinputpath, "h5", suffix="temp")
 
@@ -31,7 +31,7 @@ def process_solution(zipinputpath, jldoutputpath, suffix):
 
     # Convert H5 solution to JLD PRAS data
     subprocess.run(
-        ["julia", scriptpath("generate_jld.jl"), h5outputpath, jldoutputpath, suffix],
+        ["julia", scriptpath("generate_jld.jl"), h5outputpath, jldoutputpath, suffix] + vgcats,
         check=True)
 
     # Remove H5 solution
@@ -40,7 +40,7 @@ def process_solution(zipinputpath, jldoutputpath, suffix):
     return jldoutputpath
 
 
-def process_solutions(inputdir, outputfile, nproc, suffix):
+def process_solutions(inputdir, outputfile, nproc, suffix, vgcats):
     "Assumes zip files names are in the standard Model {modelname} Solution.zip format"
 
     # Find relevant solutions and report that they're being processed
@@ -50,12 +50,12 @@ def process_solutions(inputdir, outputfile, nproc, suffix):
           "\n".join(filepaths), sep="")
 
     # Generate JLD filenames and files
-    filepaths = [
-        (zippath, changeextension(zippath, "jld", suffix="temp"), suffix)
+    julia_args = [
+        (zippath, changeextension(zippath, "jld", suffix="temp"), suffix, vgcats)
         for zippath in filepaths]
 
     with Pool(processes=nproc) as pool:
-        jldpaths = pool.starmap(process_solution, filepaths)
+        jldpaths = pool.starmap(process_solution, julia_args)
 
     # Collect JLD filepaths and run consolidation script
     subprocess.run(
@@ -84,12 +84,16 @@ def _process_solutions(args=None):
         help="Maximum number of PLEXOS solution files to process in parallel"
     )
     argparser.add_argument(
+        "--vg", action="append",
+        help="Generator category to be considered as VG instead of dispatchable"
+    )
+    argparser.add_argument(
         "--suffix", default="PRAS",
         help="Model name suffix identifying results to be read in to PRAS"
     )
     args = argparser.parse_args(args)
 
-    process_solutions(args.inputdir, args.outputfile, args.nprocs, args.suffix)
+    process_solutions(args.inputdir, args.outputfile, args.nprocs, args.suffix, args.vg)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='plexos2pras',
-      version='0.1.1',
+      version='0.1.2',
       packages=['plexos2pras'],
       package_data={'plexos2pras': ['*.jl']},
       entry_points={
