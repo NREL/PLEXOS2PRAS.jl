@@ -6,6 +6,7 @@ using JLD
 include("utils.jl")
 include("loadh5.jl")
 
+# TODO: Update for time-variability
 function aggregate_regionally(n_regions::Int,
                               available_capacity::Matrix{T},
                               outage_rate::Matrix{T},
@@ -73,23 +74,25 @@ h5open(inputpath_h5, "r") do h5file
     # Load Data
 
     loaddata = load_singlebanddata(h5file, "data/ST/interval/region/Load")
-    keep_periods = .!isnan.(loaddata[:, 1])
+    @assert n_regions == size(loaddata, 2)
 
+    keep_periods = .!isnan.(loaddata[:, 1])
+    loaddata = loaddata[keep_periods, :]'
     timestamps = tstamps[keep_periods]
     n_periods = length(timestamps)
-    @assert n_regions == size(loaddata, 2)
 
     # Transmission Data
 
     transfers = load_singlebanddata(
         h5file,
-        "data/ST/interval/region_regions/Available Transfer Capability")
+        "data/ST/interval/region_regions/Available Transfer Capability",
+        keep_periods)
 
-    isexchange = region_regions[:ParentRegionIdx] .!= region_regions[:ChildRegionIdx]
-
-    # Eliminate self-transfer columns
-    region_regions = region_regions[isexchange, :]
-    transfers = transfers[:, isexchange]
+    # # Eliminate self-transfer columns
+    # isexchange =
+    #     region_regions[:ParentRegionIdx] .!= region_regions[:ChildRegionIdx]
+    # region_regions = region_regions[isexchange, :]
+    # transfers = transfers_all[:, isexchange]
 
     region_regions_edgelabels = map(
         (pi,ci) -> (min(pi, ci), max(pi, ci)),
@@ -111,14 +114,14 @@ h5open(inputpath_h5, "r") do h5file
     end
 
     # Determine which interfaces are always zero-limit and remove
-    nonzero_transfer = reshape(any(x->x>0, transfers_deduplicated, 1), :)
-    edgelabels = edgelabels[nonzero_transfer]
-    transfers_nonzero = transfers_deduplicated[:, nonzero_transfer]
+    nonzero_interfaces = reshape(any(x -> x>0, transfers_deduplicated, 1), :)
+    edgelabels = edgelabels[nonzero_interfaces]
+    transfers_nonzero = transfers_deduplicated[:, nonzero_interfaces]
 
     # Assign each time period to a de-deduplicated interface transfer limit
     hashes = UInt[]
+    interface_distrs = Generic{Float64,Float64,Vector{Float64}}[]
     interface_lookups = Vector{Int}(n_periods)
-    interface_distrs = Vector{Generic{Float64,Float64,Vector{Float64}}}(n_periods)
     nuniques = 0
 
     for i in 1:n_periods
@@ -141,23 +144,22 @@ h5open(inputpath_h5, "r") do h5file
     # Generator Data
 
     outagerate = load_singlebanddata(
-        h5file, "data/ST/interval/generator/x") ./ 100
+        h5file, "data/ST/interval/generator/x", keep_periods) ./ 100
 
-
-    outagerate = outagerate[keep_periods, :]
     available_capacity = load_singlebanddata(
-        h5file, "data/ST/interval/generator/Available Capacity")[keep_periods, :]
-    loaddata = loaddata[keep_periods, :]'
-    vgprofiles, dispdistrs = aggregate_regionally(
+        h5file, "data/ST/interval/generator/Available Capacity", keep_periods)
+
+    vgprofiles, maxgen_distrs = aggregate_regionally(
         n_regions, available_capacity, outagerate,
         Vector(generators[:RegionIdx]), Vector(generators[:VG]))
 
-    n = length(timestamps)
-
-    system = ResourceAdequacy.SystemDistributionSet{1,Hour,n,Hour,MW}(
-        timestamps,
-        regionnames, maxgen_distrs, maxgen_lookups, vgprofiles,
-        edgelabels, interface_distrs, interface_lookups, loaddata)
+    system =
+        ResourceAdequacy.SystemDistributionSet{1,Hour,n_periods,Hour,MW,MWh}(
+            timestamps,
+            regionnames, maxgen_distrs, maxgen_lookups,
+            vgprofiles,
+            edgelabels, hcat(interface_distrs...), interface_lookups,
+            loaddata)
 
     save(outputpath_jld, systemname, system)
 

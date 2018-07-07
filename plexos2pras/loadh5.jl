@@ -76,3 +76,5 @@ function load_metadata(inputpath_h5::String)
 end
 
 load_singlebanddata(h5file, path) = squeeze(h5file[path][1, :, :], 1)
+load_singlebanddata(h5file, path, keepperiods) =
+    load_singlebanddata(h5file, path)[keepperiods, :]
