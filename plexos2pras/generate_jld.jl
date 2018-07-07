@@ -39,7 +39,6 @@ function aggregate_regionally(n_regions::Int,
 
 end
 
-# Use h5py to load compound data
 inputpath_h5 = ARGS[1]
 outputpath_jld = ARGS[2]
 suffix = ARGS[3]
@@ -48,6 +47,7 @@ vg_categories = length(ARGS) > 3 ? ARGS[4:end] : String[]
 systemname = extract_modelname(inputpath_h5, suffix)
 
 vgcategory(x::String) = x in vg_categories
+pointdistr(x) = Generic(Float64[x], [1.])
 
 # TODO: Would be nice to check that the necessary properties
 # are reported before starting to load things in
@@ -62,16 +62,21 @@ if tstamps[1] + Hour(1) != tstamps[2]
          " reliability metrics and units will likely be incorrect.")
 end
 
+# Region Data
+regions = unique(region_regions[[:ParentRegion, :ParentRegionIdx]], :ParentRegionIdx)
+sort!(regions, :ParentRegionIdx)
+regionnames = regions[:ParentRegion]
+n_regions = length(regionnames)
+
 h5open(inputpath_h5, "r") do h5file
 
     # Load Data
 
     loaddata = load_singlebanddata(h5file, "data/ST/interval/region/Load")
-    regions = unique(region_regions[[:ParentRegion, :ParentRegionIdx]], :ParentRegionIdx)
-    sort!(regions, :ParentRegionIdx)
-    regionnames = regions[:ParentRegion]
+    keep_periods = .!isnan.(loaddata[:, 1])
 
-    n_regions = length(regionnames)
+    timestamps = tstamps[keep_periods]
+    n_periods = length(timestamps)
     @assert n_regions == size(loaddata, 2)
 
     # Transmission Data
@@ -80,47 +85,65 @@ h5open(inputpath_h5, "r") do h5file
         h5file,
         "data/ST/interval/region_regions/Available Transfer Capability")
 
-    region_regions[:TransferLimit] = collect(transfers[1,:]) # Static flow bounds for now
+    isexchange = region_regions[:ParentRegionIdx] .!= region_regions[:ChildRegionIdx]
 
-    region_regions[:EdgeLabel] = map((pi,ci) -> (min(pi, ci), max(pi, ci)),
-                                     region_regions[:ParentRegionIdx],
-                                     region_regions[:ChildRegionIdx])
+    # Eliminate self-transfer columns
+    region_regions = region_regions[isexchange, :]
+    transfers = transfers[:, isexchange]
 
-    edges = by(region_regions, :EdgeLabel) do d::AbstractDataFrame
+    region_regions_edgelabels = map(
+        (pi,ci) -> (min(pi, ci), max(pi, ci)),
+        region_regions[:ParentRegionIdx], region_regions[:ChildRegionIdx])
 
-        if size(d,1) != 2
-            label = d[1, :EdgeLabel]
-            label[1] == label[2] && return DataFrame(TransferLimit=[]) # Ignore self-transfer data
-            error("Unexpected line flow data: $d") # Non self-transfers should only ever have 2 flows
-        end
+    # Combine both flow directions into single columns
+    edgelabels = [(i,j) for i in 1:n_regions for j in (i+1):n_regions]
+    transfers_deduplicated = similar(
+        transfers, dims=(n_periods, n_regions*(n_regions-1)/2))
 
-        limit1 = d[1, :TransferLimit]
-        limit2 = d[2, :TransferLimit]
-
-        if limit1 == limit2
-            return limit1 > 0. ?
-                DataFrame(TransferLimit=limit1) : # Symmetrical constraints
-                DataFrame(TransferLimit=[]) # No actual connection , ignore
-        else
-            region1 = d[1, :ParentRegion]
-            region2 = d[2, :ParentRegion]
-            warn("Asymmetrical transfer limits between $region1 and $region2" *
-                    "($limit1 and $limit2). Using the lower of the two values.")
-            return DataFrame(TransferLimit=min(limit1, limit2))
-        end
+    for (i, (from, to)) in enumerate(edgelabels)
+        idxs = find(label -> label == (from, to),
+                    region_regions_edgelabels)
+        length(idxs) != 2 &&
+            error("Expected two matching edge labels for $((from, to)) ",
+                  "but got $(length(idxs))")
+        transfers_deduplicated[:, i] =
+            min.(transfers[:, idxs[1]], transfers[:, idxs[2]])
     end
 
-    edgelabels = Vector{Tuple{Int,Int}}(edges[:EdgeLabel])
-    edgedistrs = [Generic(Float64[l], [1.]) for l in edges[:TransferLimit]]
+    # Determine which interfaces are always zero-limit and remove
+    nonzero_transfer = reshape(any(x->x>0, transfers_deduplicated, 1), :)
+    edgelabels = edgelabels[nonzero_transfer]
+    transfers_nonzero = transfers_deduplicated[:, nonzero_transfer]
+
+    # Assign each time period to a de-deduplicated interface transfer limit
+    hashes = UInt[]
+    interface_lookups = Vector{Int}(n_periods)
+    interface_distrs = Vector{Generic{Float64,Float64,Vector{Float64}}}(n_periods)
+    nuniques = 0
+
+    for i in 1:n_periods
+
+        maxtransfers = transfers_nonzero[i, :]
+        transfershash = hash(maxtransfers)
+        hashidx = findfirst(hashes, transfershash)
+
+        if hashidx > 0
+            interface_lookups[i] = hashidx
+        else
+            push!(hashes, transfershash)
+            push!(interface_distrs, pointdistr.(maxtransfers))
+            nuniques += 1
+            interface_lookups[i] = nuniques
+        end
+
+    end
 
     # Generator Data
 
     outagerate = load_singlebanddata(
         h5file, "data/ST/interval/generator/x") ./ 100
 
-    keep_periods = .!isnan.(outagerate[:, 1])
 
-    timestamps = tstamps[keep_periods]
     outagerate = outagerate[keep_periods, :]
     available_capacity = load_singlebanddata(
         h5file, "data/ST/interval/generator/Available Capacity")[keep_periods, :]
@@ -131,10 +154,10 @@ h5open(inputpath_h5, "r") do h5file
 
     n = length(timestamps)
 
-    system = ResourceAdequacy.SystemDistributionSet{
-        1,Hour,n,Hour,MW,MWh}(
-        timestamps, regionnames, dispdistrs, vgprofiles,
-        edgelabels, edgedistrs, loaddata)
+    system = ResourceAdequacy.SystemDistributionSet{1,Hour,n,Hour,MW}(
+        timestamps,
+        regionnames, maxgen_distrs, maxgen_lookups, vgprofiles,
+        edgelabels, interface_distrs, interface_lookups, loaddata)
 
     save(outputpath_jld, systemname, system)
 
