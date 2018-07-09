@@ -6,24 +6,18 @@ using JLD
 include("utils.jl")
 include("loadh5.jl")
 
-# TODO: Update for time-variability
-function aggregate_regionally(n_regions::Int,
-                              available_capacity::Matrix{T},
-                              outage_rate::Matrix{T},
-                              regions::Vector{Int},
-                              isvgs::Vector{Bool}) where T
+function aggregate_dispatchables_regionally(
+    n_regions::Int
+    available_capacity::Vector{T},
+    outage_rate::Vector{T},
+    regions::Vector{Int}) where {T<:Real}
 
-    vgprofiles = zeros(T, n_regions, size(available_capacity, 1))
-    dispcaps = [Int[] for _ in 1:n_regions]
+    dispcaps = [Int[] for _ in 1:n_regions for 1:n_periods]
     dispors = [T[] for _ in 1:n_regions]
 
-    for (i, (r, isvg)) in enumerate(zip(regions, isvgs))
-        if isvg
-            vgprofiles[r, :] .+= available_capacity[:, i]
-        else
-            push!(dispcaps[r], round(Int, available_capacity[1, i]))
-            push!(dispors[r], 1.-outage_rate[1, i]./100)
-        end
+    for (i, r) in enumerate(regions)
+            push!(dispcaps[r], round(Int, available_capacity[i]))
+            push!(dispors[r], 1-outage_rate[i]/100)
     end
 
     dispdistrs = Vector{Generic{Float64,Float64,Vector{Float64}}}(n_regions)
@@ -32,11 +26,76 @@ function aggregate_regionally(n_regions::Int,
             dispdistrs[i] = Generic([0.],[1.])
         else
             dist = ResourceAdequacy.spconv(dispcap, dispor)
-            dispdistrs[i] = Generic(Vector{Float64}(support(dist)), Distributions.probs(dist))
+            dispdistrs[i] = Generic(Vector{Float64}(support(dist)),
+                                    Distributions.probs(dist))
         end
     end
 
-    return vgprofiles, dispdistrs
+    return dispdistrs
+
+end
+
+function aggregate_vg_regionally(n_regions::Int,
+                                 available_capacity::Matrix{T}
+                                 regions::Vector{Int})
+
+    vg_capacity = available_capacity[:, isvgs]
+    vg_regions = regions[isvgs]
+    vgprofiles = zeros(T, n_regions, size(available_capacity, 1))
+
+    for (i, r) in enumerate(vg_regions)
+        vgprofiles[r, :] .+= vg_capacity[:, i]
+    end
+
+    return vgprofiles
+
+end
+
+function aggregate_regionally(n_regions::Int,
+                              n_periods::Int,
+                              available_capacity::Matrix{T},
+                              outage_rate::Matrix{T},
+                              regions::Vector{Int},
+                              isvgs::Vector{Bool}) where T
+
+    vgprofiles = aggregate_vg_regionally(
+        n_regions, available_capacity, regions)
+
+    # Deduplicate and store dispatchable capacity distribution
+    # in each region
+
+    dispatchables_capacity = available_capacity[:, !isvgs]
+    dispatchables_outagerate = outate_rate[:, !isvgs]
+    dispatchables_regions = regions[!isvgs]
+
+    genshashes = UInt[]
+    gendistrs = CapacityDistribution{T}[]
+    nuniques = 0
+    gendistrlookup = Vector{Int}(n_periods)
+
+    for i in 1:n_periods
+
+        capacities = dispatchables_capacity[i, :]
+        outagerates = dispatchables_outagerate[i, :]
+
+        genshash = hash((capacities, outagerates))
+        hashidx = findfirst(genshashes, genshash)
+
+        if hashidx > 0
+            gendistrlookup[i] = hashidx
+        else
+            distrs = aggregate_dispatchables_regionally(
+                n_regions, capacities,
+                outagerates, dispatchables_regions)
+            nuniques += 1
+            push!(genshashes, genshash)
+            push!(gendistrs, distrs)
+            gendistrlookup[i] = nuniques
+        end
+
+    end
+
+    return vgprofiles, hcat(gendistrs...)
 
 end
 
@@ -150,7 +209,7 @@ h5open(inputpath_h5, "r") do h5file
         h5file, "data/ST/interval/generator/Available Capacity", keep_periods)
 
     vgprofiles, maxgen_distrs = aggregate_regionally(
-        n_regions, available_capacity, outagerate,
+        n_regions, n_periods, available_capacity, outagerate,
         Vector(generators[:RegionIdx]), Vector(generators[:VG]))
 
     system =
