@@ -1,37 +1,40 @@
 using ResourceAdequacy
-using Distributions
+using DataFrames
 using HDF5
 using JLD
 
 include("utils.jl")
 include("loadh5.jl")
 
-function aggregate_dispatchables_regionally(
-    n_regions::Int
-    available_capacity::Vector{T},
-    outage_rate::Vector{T},
-    regions::Vector{Int}) where {T<:Real}
+function process_dispatchable_generators(
+    capacity::Matrix{T}, λ::Matrix{T}, μ::Matrix{T}) where {T <: Real}
 
-    dispcaps = [Int[] for _ in 1:n_regions for 1:n_periods]
-    dispors = [T[] for _ in 1:n_regions]
+    # Assign each time period to a de-deduplicated generators spec limit
+    hashes = UInt[]
+    genspecs_lookup = Vector{Int}(n_periods)
+    genspecs = Matrix{DispatchableGeneratorSpec{T}}(size(capacity, 2), size(capacity, 1))
+    nuniques = 0
 
-    for (i, r) in enumerate(regions)
-            push!(dispcaps[r], round(Int, available_capacity[i]))
-            push!(dispors[r], 1-outage_rate[i]/100)
-    end
+    for t in 1:n_periods
 
-    dispdistrs = Vector{Generic{Float64,Float64,Vector{Float64}}}(n_regions)
-    for (i, (dispcap, dispor)) in enumerate(zip(dispcaps, dispors))
-        if length(dispcap) == 0
-            dispdistrs[i] = Generic([0.],[1.])
+        genspecs_t = DispatchableGeneratorSpec.(
+            view(capacity, t, :), view(λ, t, :), view(μ, t, :))
+
+        genspecshash = hash(genspecs_t)
+        hashidx = findfirst(hashes, genspecshash)
+
+        if hashidx > 0
+            genspecs_lookup[t] = hashidx
         else
-            dist = ResourceAdequacy.spconv(dispcap, dispor)
-            dispdistrs[i] = Generic(Vector{Float64}(support(dist)),
-                                    Distributions.probs(dist))
+            push!(hashes, genspecshash)
+            nuniques += 1
+            genspecs[nuniques, :] = genspecs_t
+            genspecs_lookup[t] = nuniques
         end
+
     end
 
-    return dispdistrs
+    return genspecs[1:nuniques, :], genspecs_lookup
 
 end
 
@@ -39,63 +42,13 @@ function aggregate_vg_regionally(n_regions::Int,
                                  available_capacity::Matrix{T}
                                  regions::Vector{Int})
 
-    vg_capacity = available_capacity[:, isvgs]
-    vg_regions = regions[isvgs]
     vgprofiles = zeros(T, n_regions, size(available_capacity, 1))
 
-    for (i, r) in enumerate(vg_regions)
+    for (i, r) in enumerate(regions)
         vgprofiles[r, :] .+= vg_capacity[:, i]
     end
 
     return vgprofiles
-
-end
-
-function aggregate_regionally(n_regions::Int,
-                              n_periods::Int,
-                              available_capacity::Matrix{T},
-                              outage_rate::Matrix{T},
-                              regions::Vector{Int},
-                              isvgs::Vector{Bool}) where T
-
-    vgprofiles = aggregate_vg_regionally(
-        n_regions, available_capacity, regions)
-
-    # Deduplicate and store dispatchable capacity distribution
-    # in each region
-
-    dispatchables_capacity = available_capacity[:, !isvgs]
-    dispatchables_outagerate = outate_rate[:, !isvgs]
-    dispatchables_regions = regions[!isvgs]
-
-    genshashes = UInt[]
-    gendistrs = CapacityDistribution{T}[]
-    nuniques = 0
-    gendistrlookup = Vector{Int}(n_periods)
-
-    for i in 1:n_periods
-
-        capacities = dispatchables_capacity[i, :]
-        outagerates = dispatchables_outagerate[i, :]
-
-        genshash = hash((capacities, outagerates))
-        hashidx = findfirst(genshashes, genshash)
-
-        if hashidx > 0
-            gendistrlookup[i] = hashidx
-        else
-            distrs = aggregate_dispatchables_regionally(
-                n_regions, capacities,
-                outagerates, dispatchables_regions)
-            nuniques += 1
-            push!(genshashes, genshash)
-            push!(gendistrs, distrs)
-            gendistrlookup[i] = nuniques
-        end
-
-    end
-
-    return vgprofiles, hcat(gendistrs...)
 
 end
 
@@ -141,84 +94,50 @@ h5open(inputpath_h5, "r") do h5file
     n_periods = length(timestamps)
 
     # Transmission Data
+    # For now we ignore and load system as copper plate
 
-    transfers = load_singlebanddata(
-        h5file,
-        "data/ST/interval/region_regions/Available Transfer Capability",
-        keep_periods)
+    # Load interregional lines
+    # TODO
 
-    # # Eliminate self-transfer columns
-    # isexchange =
-    #     region_regions[:ParentRegionIdx] .!= region_regions[:ChildRegionIdx]
-    # region_regions = region_regions[isexchange, :]
-    # transfers = transfers_all[:, isexchange]
+    # TODO: Determine line source and destination
 
-    region_regions_edgelabels = map(
-        (pi,ci) -> (min(pi, ci), max(pi, ci)),
-        region_regions[:ParentRegionIdx], region_regions[:ChildRegionIdx])
+    # Load line flow limits
+    # Min and max flows? (and warn if not symmetrical?)
+    # transfers = load_singlebanddata(
+    #     h5file,
+    #     "data/ST/interval/line/Max Flow",
+    #     keep_periods)
 
-    # Combine both flow directions into single columns
-    edgelabels = [(i,j) for i in 1:n_regions for j in (i+1):n_regions]
-    transfers_deduplicated = similar(
-        transfers, dims=(n_periods, n_regions*(n_regions-1)/2))
+    # TODO: Associate interregional lines with max flows
 
-    for (i, (from, to)) in enumerate(edgelabels)
-        idxs = find(label -> label == (from, to),
-                    region_regions_edgelabels)
-        length(idxs) != 2 &&
-            error("Expected two matching edge labels for $((from, to)) ",
-                  "but got $(length(idxs))")
-        transfers_deduplicated[:, i] =
-            min.(transfers[:, idxs[1]], transfers[:, idxs[2]])
-    end
-
-    # Determine which interfaces are always zero-limit and remove
-    nonzero_interfaces = reshape(any(x -> x>0, transfers_deduplicated, 1), :)
-    edgelabels = edgelabels[nonzero_interfaces]
-    transfers_nonzero = transfers_deduplicated[:, nonzero_interfaces]
-
-    # Assign each time period to a de-deduplicated interface transfer limit
-    hashes = UInt[]
-    interface_distrs = Generic{Float64,Float64,Vector{Float64}}[]
-    interface_lookups = Vector{Int}(n_periods)
-    nuniques = 0
-
-    for i in 1:n_periods
-
-        maxtransfers = transfers_nonzero[i, :]
-        transfershash = hash(maxtransfers)
-        hashidx = findfirst(hashes, transfershash)
-
-        if hashidx > 0
-            interface_lookups[i] = hashidx
-        else
-            push!(hashes, transfershash)
-            push!(interface_distrs, pointdistr.(maxtransfers))
-            nuniques += 1
-            interface_lookups[i] = nuniques
-        end
-
-    end
-
-    # Generator Data
-
-    outagerate = load_singlebanddata(
-        h5file, "data/ST/interval/generator/x", keep_periods) ./ 100
+    isvg = generators[:VG]
 
     available_capacity = load_singlebanddata(
         h5file, "data/ST/interval/generator/Available Capacity", keep_periods)
 
-    vgprofiles, maxgen_distrs = aggregate_regionally(
-        n_regions, n_periods, available_capacity, outagerate,
-        Vector(generators[:RegionIdx]), Vector(generators[:VG]))
+    # VG Data
+    vg_capacity = available_capacity[:, isvg]
+    vgprofiles = aggregate_vg_regionally(
+        n_regions, vg_capacity,
+        generators[:RegionIdx, isvg])
 
+    # Dispatchable Generator Data
+    dispatchable_capacity = available_capacity[:, !isvg]
+    outagerate = load_singlebanddata(
+        h5file, "data/ST/interval/generator/x", keep_periods)[:, !isvg] ./ 100
+    mttr = load_singlebanddata(
+        h5file, "data/ST/interval/generator/y", keep_periods)[:, !isvg]
+    μ = 1 ./ mttr
+    λ = μ .* outagerate ./ (1 .- outagerate)
+    generators, timestamps_generatorset = process_dispatchable_generators(
+        generators[:, !isvg], dispatchable_capacity, λ, μ)
+
+    # Single-node system for now
     system =
-        ResourceAdequacy.SystemDistributionSet{1,Hour,n_periods,Hour,MW,MWh}(
-            timestamps,
-            regionnames, maxgen_distrs, maxgen_lookups,
-            vgprofiles,
-            edgelabels, hcat(interface_distrs...), interface_lookups,
-            loaddata)
+        ResourceAdequacy.MultiPeriodSystem{1,Hour,n_periods,Hour,MW,MWh}(
+            generators, StorageDeviceSpec{Float64}[],
+            timestamps, timestamps_generatorset, ones(Int, length(timestamps))
+            reshape(sum(vgprofiles, 1), :), reshape(sum(loaddata, 1), :))
 
     save(outputpath_jld, systemname, system)
 
