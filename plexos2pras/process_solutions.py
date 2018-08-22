@@ -80,7 +80,7 @@ def _process_solutions(args=None):
     )
     argparser.add_argument(
         "outputfile",
-        help="Name of the JLD file to store processed RAS systems"
+        help="Name of the JLD file to store processed PRAS systems"
     )
     argparser.add_argument(
         "--parallel", default=1, type=int,
@@ -92,7 +92,11 @@ def _process_solutions(args=None):
     )
     argparser.add_argument(
         "--vg", nargs="*",
-        help="Generator category to be considered as VG instead of dispatchable"
+        help="Generator categories to be considered as VG instead of dispatchable"
+    )
+    argparser.add_argument(
+        "--exclude", nargs="*",
+        help="Generator categories to exclude from the resulting PRAS system (NOT YET FUNCTIONAL)"
     )
     argparser.add_argument(
         "--suffix", default="PRAS",

@@ -113,9 +113,10 @@ def process_workbook(infile, outfile, suffix):
                     "child_object"] = new_obj_name
 
     # Remove memberships to other phases (LT, PASA, MT)
-    memberships.drop(d.index[(d["child_class"] == "LT Plan") |
-                             (d["child_class"] == "PASA") |
-                             (d["child_class"] == "MT Schedule")
+    memberships.drop(memberships.index[
+        (memberships["child_class"] == "LT Plan") |
+        (memberships["child_class"] == "PASA") |
+        (memberships["child_class"] == "MT Schedule")
     ], inplace=True)
 
     # Create new Report object
