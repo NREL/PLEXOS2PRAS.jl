@@ -121,10 +121,10 @@ def process_workbook(infile, outfile, suffix):
     # Add desired properties output
     reports = reports.append(pd.DataFrame({
         "object": new_obj_name,
-        "parent_class": ["System", "Region", "System", "System", "System"],
-        "child_class": ["Region", "Region", "Generator", "Generator", "Generator"],
-        "collection": ["Regions", "Regions", "Generators", "Generators", "Generators"],
-        "property": ["Load", "Available Transfer Capability", "Available Capacity", "x", "y"],
+        "parent_class": ["System", "System", "System", "System", "System", "System"],
+        "child_class": ["Region", "Interface", "Line", "Generator", "Generator", "Generator"],
+        "collection": ["Regions", "Interfaces", "Lines", "Generators", "Generators", "Generators"],
+        "property": ["Load", "Export Limit", "Export Limit", "Available Capacity", "x", "y"],
         "phase_id": 4,
         "report_period": True,
         "report_summary": False,

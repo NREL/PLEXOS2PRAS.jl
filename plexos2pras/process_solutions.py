@@ -22,9 +22,12 @@ def changeextension(filepath, newextension, suffix=None):
     return filepath
 
 
-def process_solution(zipinputpath, jldoutputpath, suffix, vgcats):
+def process_solution(zipinputpath, jldoutputpath, suffix, vgcats, use_interfaces):
 
     h5outputpath = changeextension(zipinputpath, "h5", suffix="temp")
+
+    # TODO: Use this once network import supported again
+    # generate_script = "generate_jld_interfaces.jl" if use_interfaces else "generate_jld_lines.jl"
 
     # Convert zip solution to H5 solution
     process_to_h5(zipinputpath, h5outputpath).close()
@@ -40,7 +43,7 @@ def process_solution(zipinputpath, jldoutputpath, suffix, vgcats):
     return jldoutputpath
 
 
-def process_solutions(inputdir, outputfile, nproc, suffix, vgcats):
+def process_solutions(inputdir, outputfile, nproc, suffix, vgcats, use_interfaces):
     "Assumes zip files names are in the standard Model {modelname} Solution.zip format"
 
     # Find relevant solutions and report that they're being processed
@@ -51,7 +54,7 @@ def process_solutions(inputdir, outputfile, nproc, suffix, vgcats):
 
     # Generate JLD filenames and files
     julia_args = [
-        (zippath, changeextension(zippath, "jld", suffix="temp"), suffix, vgcats)
+        (zippath, changeextension(zippath, "jld", suffix="temp"), suffix, vgcats, use_interfaces)
         for zippath in filepaths]
 
     with Pool(processes=nproc) as pool:
@@ -80,11 +83,15 @@ def _process_solutions(args=None):
         help="Name of the JLD file to store processed RAS systems"
     )
     argparser.add_argument(
-        "--nprocs", default=4, type=int,
+        "--parallel", default=1, type=int,
         help="Maximum number of PLEXOS solution files to process in parallel"
     )
     argparser.add_argument(
-        "--vg", action="append",
+        "--interfacelimits", action="store_true",
+        help="Use biregional interfaces to define interregional transfer limits, instead of using interregional lines"
+    )
+    argparser.add_argument(
+        "--vg", nargs="*",
         help="Generator category to be considered as VG instead of dispatchable"
     )
     argparser.add_argument(
@@ -93,7 +100,7 @@ def _process_solutions(args=None):
     )
     args = argparser.parse_args(args)
 
-    process_solutions(args.inputdir, args.outputfile, args.nprocs, args.suffix, args.vg)
+    process_solutions(args.inputdir, args.outputfile, args.parallel, args.suffix, args.vg, args.interfacelimits)
 
 
 if __name__ == "__main__":
