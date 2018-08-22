@@ -112,6 +112,11 @@ def process_workbook(infile, outfile, suffix):
     memberships.loc[memberships["child_class"] == "ST Schedule",
                     "child_object"] = new_obj_name
 
+    # Remove memberships to other phases (LT, PASA, MT)
+    memberships.drop(d.index[(d["child_class"] == "LT Plan") |
+                             (d["child_class"] == "PASA") |
+                             (d["child_class"] == "MT Schedule")
+    ], inplace=True)
 
     # Create new Report object
     objects = objects.append(pd.DataFrame({
@@ -136,7 +141,6 @@ def process_workbook(infile, outfile, suffix):
     memberships.loc[memberships["child_class"] == "Report",
                     "child_object"] = new_obj_name
 
-
     # Add suffix to all Model names
     objects.loc[objects["class"] == "Model",
                 "name"] += new_obj_name
@@ -145,11 +149,15 @@ def process_workbook(infile, outfile, suffix):
     attributes.loc[attributes["class"] == "Model",
                    "name"] += new_obj_name
 
-    # Delete all Model dry run attributes
-    attributes = remove_attributes(attributes, [("Model", "Run Mode")])
+    # Reset relevant Model attributes
+    attributes = remove_attributes(attributes, [("Model", "Run Mode"),
+                                                ("Model", "Output to Folder"),
+                                                ("Model", "Write Input")])
 
-    # Create new Model dry run attributes
+    # Recreate relevant Model attributes to spec
     attributes = blanket_attributes(attributes, objects, "Model", "Run Mode", 1)
+    attributes = blanket_attributes(attributes, objects, "Model", "Output to Folder", -1)
+    attributes = blanket_attributes(attributes, objects, "Model", "Write Input", 0)
 
     # Save out results to new file
     with pd.ExcelWriter(outfile) as f:
