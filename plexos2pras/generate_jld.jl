@@ -75,7 +75,7 @@ notvg = .!isvg
 if tstamps[1] + Hour(1) != tstamps[2]
     warn("The importer currently assumes your PLEXOS intervals are hourly" *
          " but this doesn't seem to be the case with your data. Time-related" *
-         " reliability metrics and units will likely be incorrect.")
+         " reliability metrics, units, and timestamps will likely be incorrect.")
 end
 
 # Region Data
@@ -94,7 +94,8 @@ h5open(inputpath_h5, "r") do h5file
     keep_periods = .!isnan.(loaddata[:, 1])
     loaddata = loaddata[keep_periods, :]'
     timestamps = tstamps[keep_periods]
-    n_periods = length(timestamps)
+    timerange = first(timestamps):Hour(1):last(timestamps)
+    n_periods = length(timerange)
 
     # Transmission Data
     # For now we ignore and load system as copper plate
@@ -138,7 +139,7 @@ h5open(inputpath_h5, "r") do h5file
     system =
         ResourceAdequacy.MultiPeriodSystem{1,Hour,n_periods,Hour,MW,MWh}(
             generatorspecs, Matrix{ResourceAdequacy.StorageDeviceSpec{Float64}}(0,1),
-            timestamps, timestamps_generatorset, ones(Int, length(timestamps)),
+            timerange, timestamps_generatorset, ones(Int, n_periods),
             reshape(sum(vgprofiles, 1), :), reshape(sum(loaddata, 1), :))
 
     save(outputpath_jld, systemname, system)
