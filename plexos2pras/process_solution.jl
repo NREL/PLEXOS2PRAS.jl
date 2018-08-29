@@ -1,10 +1,23 @@
 using ResourceAdequacy
-using DataFrames
-using HDF5
-using JLD
 
-include("utils.jl")
 include("loadh5.jl")
+
+function extract_modelname(filename::String,
+                           suffix::String,
+                           default::String="system")::String
+
+    rgx = Regex(".*Model (.+)_" * suffix * " Solution.*")
+    result = match(rgx, filename)
+
+    if result isa Void
+        warn("Could not determine PLEXOS model name from filename $filename, " *
+             "falling back on default '$default'")
+        return  default
+    else
+        return result.captures[1]
+    end
+
+end
 
 function process_dispatchable_generators(
     capacity::Matrix{T}, λ::Matrix{T}, μ::Matrix{T}) where {T <: Real}
@@ -55,40 +68,22 @@ function aggregate_vg_regionally(
 
 end
 
-inputpath_h5 = ARGS[1]
-outputpath_jld = ARGS[2]
-suffix = ARGS[3]
-vg_categories = length(ARGS) > 3 ? ARGS[4:end] : String[]
+function loadsystem(
+    inputpath_h5::String, suffix::String, vg_categories::Vector{String},
+    exclude::Vector{String}, useinterfaces::Bool)
 
-systemname = extract_modelname(inputpath_h5, suffix)
+    systemname = extract_modelname(inputpath_h5, suffix)
+    rawdata = loadh5(inputpath_h5, vg_categories, exclude_categories)
 
-vgcategory(x::String) = x in vg_categories
-
-# TODO: Would be nice to check that the necessary properties
-# are reported before starting to load things in
-
-tstamps, generators, region_regions = load_metadata(inputpath_h5)
-isvg = vgcategory.(generators[:GeneratorCategory])
-notvg = .!isvg
-
-#TODO: Support importing arbitrary interval lengths from PLEXOS
-if tstamps[1] + Hour(1) != tstamps[2]
-    warn("The importer currently assumes your PLEXOS intervals are hourly" *
-         " but this doesn't seem to be the case with your data. Time-related" *
-         " reliability metrics, units, and timestamps will likely be incorrect.")
-end
-
-# Region Data
-regions = unique(region_regions[[:ParentRegion, :ParentRegionIdx]], :ParentRegionIdx)
-sort!(regions, :ParentRegionIdx)
-regionnames = regions[:ParentRegion]
-n_regions = length(regionnames)
-
-h5open(inputpath_h5, "r") do h5file
+    # Region Data
+    regions = unique(region_regions[[:ParentRegion, :ParentRegionIdx]], :ParentRegionIdx)
+    sort!(regions, :ParentRegionIdx)
+    regionnames = regions[:ParentRegion]
+    n_regions = length(regionnames)
 
     # Load Data
 
-    loaddata = load_singlebanddata(h5file, "data/ST/interval/region/Load")
+    # loaddata = load_singlebanddata(h5file, "data/ST/interval/region/Load")
     @assert n_regions == size(loaddata, 2)
 
     keep_periods = .!isnan.(loaddata[:, 1])
@@ -114,22 +109,12 @@ h5open(inputpath_h5, "r") do h5file
 
     # TODO: Associate interregional lines with max flows
 
-
-    available_capacity = load_singlebanddata(
-        h5file, "data/ST/interval/generator/Available Capacity", keep_periods)
-
     # VG Data
-    vg_capacity = available_capacity[:, isvg]
     vgprofiles = aggregate_vg_regionally(
         n_regions, vg_capacity,
         generators[isvg, :RegionIdx])
 
     # Dispatchable Generator Data
-    dispatchable_capacity = available_capacity[:, notvg]
-    outagerate = load_singlebanddata(
-        h5file, "data/ST/interval/generator/x", keep_periods)[:, notvg] ./ 100
-    mttr = load_singlebanddata(
-        h5file, "data/ST/interval/generator/y", keep_periods)[:, notvg]
     μ = 1 ./ mttr
     λ = μ .* outagerate ./ (1 .- outagerate)
     generatorspecs, timestamps_generatorset =
@@ -142,6 +127,7 @@ h5open(inputpath_h5, "r") do h5file
             timerange, timestamps_generatorset, ones(Int, n_periods),
             reshape(sum(vgprofiles, 1), :), reshape(sum(loaddata, 1), :))
 
-    save(outputpath_jld, systemname, system)
+
+    return system
 
 end
