@@ -1,5 +1,8 @@
 using ArgParse
+using ResourceAdequacy
 
+include("RawSystemData.jl")
+include("loadh5.jl")
 include("process_solution.jl")
 
 function parse_commandline(args::Vector{String}=ARGS)

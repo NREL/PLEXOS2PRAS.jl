@@ -1,7 +1,3 @@
-using ResourceAdequacy
-
-include("loadh5.jl")
-
 function loadsystem(
     inputpath_h5::String, suffix::String,
     vg_categories::Vector{String}, exclude_categories::Vector{String},
