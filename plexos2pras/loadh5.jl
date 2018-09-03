@@ -45,6 +45,7 @@ struct RawSystemData{T<:Period,V<:Real}
         lineoutagerate::Matrix{V},
         linemttr::Matrix{V}) where {T<:Period, V<:Real}
 
+        # TODO: Sort regions, interfaces, lines by region and reorder data accordingly
         n_periods = length(timestamps)
         n_regions = length(regionnames)
         n_vg = length(vgregions)
