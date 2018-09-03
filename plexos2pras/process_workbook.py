@@ -76,25 +76,36 @@ def process_workbook(infile, outfile, suffix):
     properties = remove_properties(properties,
                                    [("Generators", "x"),
                                     ("Generators", "y"),
-                                    ("Generators", "Maintenance Rate")])
+                                    ("Generators", "Maintenance Rate"),
+                                    ("Lines", "x"),
+                                    ("Lines", "y"),
+                                    ("Lines", "Maintenance Rate")])
 
     # Find all FOR property rows and convert to x
     convert_properties(properties, "Generators", "Forced Outage Rate", "x")
+    convert_properties(properties, "Lines", "Forced Outage Rate", "x")
 
     # Find all MTTR property rows and convert to y
     convert_properties(properties, "Generators", "Mean Time to Repair", "y")
+    convert_properties(properties, "Lines", "Mean Time to Repair", "y")
 
     # Add new FOR property (set to zero) for each generator object
     properties = blanket_properties(properties, objects, "Generator",
                                     "Generators", "Forced Outage Rate", 0)
+    properties = blanket_properties(properties, objects, "Line",
+                                    "Lines", "Forced Outage Rate", 0)
 
     # Add new Maintenance Rate property (set to zero) for each generator object
     properties = blanket_properties(properties, objects, "Generator",
                                     "Generators", "Maintenance Rate", 0)
+    properties = blanket_properties(properties, objects, "Line",
+                                    "Lines", "Maintenance Rate", 0)
 
     # Add new/irrelevant MTTR property (to supress PLEXOS warnings)
     properties = blanket_properties(properties, objects, "Generator",
                                     "Generators", "Mean Time to Repair", 0)
+    properties = blanket_properties(properties, objects, "Line",
+                                    "Lines", "Mean Time to Repair", 0)
 
     # Create new ST Schedule object
     objects = objects.append(pd.DataFrame({
@@ -128,9 +139,12 @@ def process_workbook(infile, outfile, suffix):
     reports = reports.append(pd.DataFrame({
         "object": new_obj_name,
         "parent_class": ["System", "System", "System", "System", "System", "System"],
-        "child_class": ["Region", "Interface", "Line", "Generator", "Generator", "Generator"],
-        "collection": ["Regions", "Interfaces", "Lines", "Generators", "Generators", "Generators"],
-        "property": ["Load", "Export Limit", "Export Limit", "Available Capacity", "x", "y"],
+        "child_class": ["Region", "Interface", "Line", "Line", "Line",
+                        "Generator", "Generator", "Generator"],
+        "collection": ["Regions", "Interfaces", "Lines", "Lines", "Lines",
+                       "Generators", "Generators", "Generators"],
+        "property": ["Load", "Export Limit", "Export Limit", "x", "y",
+                     "Available Capacity", "x", "y"],
         "phase_id": 4,
         "report_period": True,
         "report_summary": False,
