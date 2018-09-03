@@ -20,7 +20,12 @@ function extract_modelname(filename::String,
 end
 
 function process_dispatchable_generators(
-    capacity::Matrix{T}, λ::Matrix{T}, μ::Matrix{T}) where {T <: Real}
+    capacity::Matrix{T}, outagerate::Matrix{T}, mttr::Matrix{T}) where {T <: Real}
+
+    μ = 1 ./ mttr # TODO: Generalize to non-hourly intervals
+
+    outagerate = outagerate ./ 100
+    λ = μ .* outagerate ./ (1 .- outagerate)
 
     #TODO: Group generators into regions for non-copperplate
 
@@ -75,58 +80,34 @@ function loadsystem(
     systemname = extract_modelname(inputpath_h5, suffix)
     rawdata = loadh5(inputpath_h5, vg_categories, exclude_categories)
 
-    # Region Data
-    regions = unique(region_regions[[:ParentRegion, :ParentRegionIdx]], :ParentRegionIdx)
-    sort!(regions, :ParentRegionIdx)
-    regionnames = regions[:ParentRegion]
-    n_regions = length(regionnames)
-
-    # Load Data
-
-    # loaddata = load_singlebanddata(h5file, "data/ST/interval/region/Load")
-    @assert n_regions == size(loaddata, 2)
-
-    keep_periods = .!isnan.(loaddata[:, 1])
-    loaddata = loaddata[keep_periods, :]'
-    timestamps = tstamps[keep_periods]
-    timerange = first(timestamps):Hour(1):last(timestamps)
-    n_periods = length(timerange)
+    n_regions = length(rawdata.regionnames)
+    n_periods = length(rawdata.timestamps)
 
     # Transmission Data
-    # For now we ignore and load system as copper plate
-
-    # Load interregional lines
-    # TODO
-
-    # TODO: Determine line source and destination
+    if useinterfaces
+        # Load in pseudo-lines based on interfaces
+    else
+        # Load in transmission lines
+    end
 
     # Load line flow limits
     # Min and max flows? (and warn if not symmetrical?)
-    # transfers = load_singlebanddata(
-    #     h5file,
-    #     "data/ST/interval/line/Max Flow",
-    #     keep_periods)
-
-    # TODO: Associate interregional lines with max flows
 
     # VG Data
-    vgprofiles = aggregate_vg_regionally(
-        n_regions, vg_capacity,
-        generators[isvg, :RegionIdx])
+    vgprofiles = aggregate_vg_regionally(rawdata)
 
     # Dispatchable Generator Data
-    μ = 1 ./ mttr
-    λ = μ .* outagerate ./ (1 .- outagerate)
-    generatorspecs, timestamps_generatorset =
-        process_dispatchable_generators(dispatchable_capacity, λ, μ)
+    generatorspecs, timestamps_generatorset, generators_regionstart =
+        process_dispatchable_generators(rawdata)
 
-    # Single-node system for now
     system =
         ResourceAdequacy.MultiPeriodSystem{1,Hour,n_periods,Hour,MW,MWh}(
-            generatorspecs, Matrix{ResourceAdequacy.StorageDeviceSpec{Float64}}(0,1),
-            timerange, timestamps_generatorset, ones(Int, n_periods),
-            reshape(sum(vgprofiles, 1), :), reshape(sum(loaddata, 1), :))
-
+            rawdata.regionnames, generatorspecs, generators_regionstart,
+            Matrix{ResourceAdequacy.StorageDeviceSpec{Float64}}(0,1), Int[],
+            _, _, _, # Interface and line data
+            rawdata.timestamps, timestamps_generatorset,
+            ones(Int, n_periods), timestamps_lineset,
+            vgprofiles, loaddata)
 
     return system
 
