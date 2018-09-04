@@ -61,7 +61,7 @@ function aggregate_vg_regionally(rawdata::RawSystemData{T,V}) where {T, V}
     vgprofiles = zeros(V, n_regions, n_periods)
 
     for (i, r) in enumerate(rawdata.vgregions)
-        vgprofiles[r, :] .+= rawdata.vg_capacity[:, i]
+        vgprofiles[r, :] .+= rawdata.vgcapacity[:, i]
     end
 
     return vgprofiles
@@ -126,11 +126,17 @@ nullgroup(::Type{Int}) = -1
 nullgroup(::Type{NTuple{N,T}}) where {N,T} = ntuple(_ -> nullgroup(T), N)
 
 function plexosoutages_to_transitionprobs(outagerate::Matrix{V}, mttr::Matrix{V}) where {V <: Real}
+
     # TODO: Generalize to non-hourly intervals
     μ = 1 ./ mttr
+    μ[mttr .== 0] = one(V) # Interpret zero MTTR as μ = 1.
+
     outagerate = outagerate ./ 100
     λ = μ .* outagerate ./ (1 .- outagerate)
+    λ[outagerate .== 0] = zero(V) # Interpret zero FOR as λ = 0.
+
     return λ, μ
+
 end
 
 function deduplicatespecs(Spec::Type{<:ResourceAdequacy.AssetSpec},
