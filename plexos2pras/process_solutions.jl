@@ -1,4 +1,6 @@
 using ArgParse
+using Base.Filesystem
+using Base.Dates
 using ResourceAdequacy
 
 include("RawSystemData.jl")
@@ -46,7 +48,7 @@ function parse_commandline(args::Vector{String}=ARGS)
             action = :store_true
     end
 
-    return parse_args(args, s)
+    return parse_args(args, s, as_symbols=true)
 
 end
 
@@ -56,20 +58,21 @@ function process_solutions(
     persist::Bool=false)
 
     # Find relevant solutions and report that they're being processed
-    inputfiles = _
-    println(length(inputfiles), " solution files will be processed:\n",
-            join(filepaths, "\n"))
+    solutions = findsolutions(inputdir, suffix)
+    println(length(solutions), " solution files will be processed:\n",
+            join(map(sol -> sol[2], solutions), "\n"))
 
     # Process systems
-    systems = Dict(pmap(
-        inputfile -> loadsystem(inputfile, suffix, vg, exclude, useinterfaces),
-        inputfiles))
+    systems = Dict(map(
+        solution -> (solution[1], 
+                     loadsystem(solution[2], vg, exclude, useinterfaces)),
+        solutions))
 
     # Save systems to disk
     persist && jldopen(outputfile, "w") do file
         print("Writing results to $outputfile...")
         addrequire(file, ResourceAdequacy)
-        for (system, systemname) in systems
+        for (systemname, system) in systems
             write(file, systemname, system)
         end
         println(" done.")
@@ -79,6 +82,20 @@ function process_solutions(
 
 end
 
-args = parse_commandline(ARGS, as_symbols=true)
+function findsolutions(inputdir::String, suffix::String)
+    solutions = Tuple{String,String}[]
+    rgx = Regex("^Model (.+)_" * suffix * " Solution.zip\$")
+    for (folder, _, files) in walkdir(inputdir), file in files
+        matchresult = match(rgx, file)
+        if !(matchresult isa Void)
+            systemname = matchresult[1]
+            systempath = folder * "/" * file
+            push!(solutions, (systemname, systempath))
+        end
+    end
+    return solutions
+end
+
+args = parse_commandline(ARGS)
 process_solutions(args[:inputdir], args[:outputfile], args[:parallel], args[:suffix],
                   args[:vg], args[:exclude], args[:useinterfaces], persist=true)

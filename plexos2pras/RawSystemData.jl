@@ -13,16 +13,15 @@ struct RawSystemData{T<:Period,V<:Real}
     dispoutagerate::Matrix{V}
     dispmttr::Matrix{V}
 
-    interfaceregions::Vector{Int,Int}
+    interfaceregions::Vector{Tuple{Int,Int}}
     interfacecapacity::Matrix{V}
 
-    lineregions::Vector{Int,Int}
+    lineregions::Vector{Tuple{Int,Int}}
     linecapacity::Matrix{V}
     lineoutagerate::Matrix{V}
     linemttr::Matrix{V}
 
-
-    function RawSystemData{T,V}(
+    function RawSystemData{}(
         timestamps::StepRange{DateTime,T},
         regionnames::Vector{String},
         demand::Matrix{V},
@@ -32,9 +31,9 @@ struct RawSystemData{T<:Period,V<:Real}
         dispcapacity::Matrix{V},
         dispoutagerate::Matrix{V},
         dispmttr::Matrix{V},
-        interfaceregions::Vector{Int,Int},
+        interfaceregions::Vector{Tuple{Int,Int}},
         interfacecapacity::Matrix{V},
-        lineregions::Vector{Int,Int},
+        lineregions::Vector{Tuple{Int,Int}},
         linecapacity::Matrix{V},
         lineoutagerate::Matrix{V},
         linemttr::Matrix{V}) where {T<:Period, V<:Real}
@@ -65,11 +64,11 @@ struct RawSystemData{T<:Period,V<:Real}
         reorder!(interfaceregions, interfacecapacity)
         reorder!(lineregions, linecapacity, lineoutagerate, linemttr)
 
-        new(timestamps, demand,
-            vgregions, vgcapacity,
-            dispregions, dispcapacity, dispoutagerate, dispmttr,
-            interfaceregions, interfacecapacity,
-            lineregions, linecapacity, lineoutagerate, linemttr)
+        new{T,V}(timestamps, regionnames, demand,
+                 vgregions, vgcapacity,
+                 dispregions, dispcapacity, dispoutagerate, dispmttr,
+                 interfaceregions, interfacecapacity,
+                 lineregions, linecapacity, lineoutagerate, linemttr)
 
     end
 
