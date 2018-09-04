@@ -138,7 +138,8 @@ def process_workbook(infile, outfile, suffix):
     # Add desired properties output
     reports = reports.append(pd.DataFrame({
         "object": new_obj_name,
-        "parent_class": ["System", "System", "System", "System", "System", "System"],
+        "parent_class": ["System", "System", "System", "System", "System",
+                         "System", "System", "System"],
         "child_class": ["Region", "Interface", "Line", "Line", "Line",
                         "Generator", "Generator", "Generator"],
         "collection": ["Regions", "Interfaces", "Lines", "Lines", "Lines",
