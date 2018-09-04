@@ -2,6 +2,7 @@ using ArgParse
 using Base.Filesystem
 using Base.Dates
 using ResourceAdequacy
+using JLD
 
 include("RawSystemData.jl")
 include("loadh5.jl")

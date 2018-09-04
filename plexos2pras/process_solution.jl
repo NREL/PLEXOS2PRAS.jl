@@ -44,7 +44,8 @@ function process_lines(rawdata::RawSystemData{T,V},
     # TODO: Respect useplexosinterfaces - load in pseudo-lines based on
     #       PLEXOS interfaces if requested
 
-    interfaces, lines_interfacestart = groupstartidxs(rawdata.lineregions)
+    interfaces = unique(rawdata.lineregions)
+    lines_interfacestart = groupstartidxs(interfaces, rawdata.lineregions)
     λ, μ = plexosoutages_to_transitionprobs(rawdata.lineoutagerate, rawdata.linemttr)
     linespecs, linespecs_lookup = deduplicatespecs(
         ResourceAdequacy.LineSpec, rawdata.linecapacity, λ, μ)
@@ -69,7 +70,8 @@ end
 
 function process_dispatchable_generators(rawdata::RawSystemData{T,V}) where {T,V}
 
-    regions, generators_regionstart = groupstartidxs(rawdata.dispregions)
+    n_regions = length(rawdata.regionnames)
+    generators_regionstart = groupstartidxs(collect(1:n_regions), rawdata.dispregions)
     λ, μ = plexosoutages_to_transitionprobs(rawdata.dispoutagerate, rawdata.dispmttr)
     genspecs, genspecs_lookup = deduplicatespecs(
         ResourceAdequacy.DispatchableGeneratorSpec, rawdata.dispcapacity, λ, μ)
@@ -80,29 +82,48 @@ end
 
 function process_storages(rawdata::RawSystemData{T,V}) where {T,V}
     n_periods = length(rawdata.timestamps)
-    return Matrix{ResourceAdequacy.StorageDeviceSpec{Float64}}(0,1), ones(Int, n_periods), Int[]
+    n_regions = length(rawdata.regionnames)
+    return Matrix{ResourceAdequacy.StorageDeviceSpec{Float64}}(0,1), ones(Int, n_periods), ones(Int, n_regions)
 end
 
-function groupstartidxs(alllabels::Vector{T}) where {T}
+function groupstartidxs(groups::Vector{T}, unitgroups::Vector{T}) where {T}
 
-    @assert issorted(alllabels)
-    prev_grouplabel = nulllabel(T)
-    grouplabels = T[]
-    groupstart_idxs = Int[]
+    @assert issorted(groups)
+    @assert issorted(unitgroups)
 
-    for (i, grouplabel) in enumerate(alllabels)
-        if grouplabel != prev_grouplabel
-            push!(grouplabels, grouplabel)
-            push!(groupstart_idxs, i)
+    n_groups = length(groups)
+    n_units = length(unitgroups)
+    groupstart_idxs = Vector{Int}(n_groups)
+
+    group_idx = unit_idx = 0
+    remaining_units = n_units > 0
+    remaining_groups = n_groups > 0
+    group = nullgroup(T)
+    unitgroup = nullgroup(T)
+
+    while remaining_groups
+
+        while unitgroup == group && remaining_units
+            unit_idx += 1
+            unitgroup = unitgroups[unit_idx]
+            unit_idx == n_units && (remaining_units = false)
         end
+
+        while !(unitgroup == group && remaining_units) && remaining_groups
+            group_idx += 1
+            group = groups[group_idx]
+            groupstart_idxs[group_idx] = group <= unitgroup ? unit_idx : n_units + 1
+            group_idx == n_groups && (remaining_groups = false)
+        end
+
     end
 
-    return grouplabels, groupstart_idxs
+    return groupstart_idxs
 
 end
 
-nulllabel(::Type{Int}) = -1
-nulllabel(::Type{NTuple{N,T}}) where {N,T} = ntuple(_ -> nulllabel(T), N)
+nullgroup(::Type{Int}) = -1
+nullgroup(::Type{NTuple{N,T}}) where {N,T} = ntuple(_ -> nullgroup(T), N)
 
 function plexosoutages_to_transitionprobs(outagerate::Matrix{V}, mttr::Matrix{V}) where {V <: Real}
     # TODO: Generalize to non-hourly intervals
