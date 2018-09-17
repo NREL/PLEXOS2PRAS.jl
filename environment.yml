@@ -9,7 +9,7 @@ dependencies:
   - openpyxl
   - xlrd
   - cython
-  - julia
+  - julia=0.6.1
   - pip:
     - https://github.nrel.gov/PCM/h5plexos/archive/master.zip
     - https://github.nrel.gov/ResourceAdequacySuite/PLEXOS2PRAS/archive/master.zip
