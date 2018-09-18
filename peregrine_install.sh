@@ -1,7 +1,7 @@
 #! /usr/bin/sh
 
 # Download the environment file
-wget -O plexos2pras_env.yml https://github.nrel.gov/raw/PRAS/PLEXOS2PRAS/master/environment.yml
+wget -O plexos2pras_env.yml https://github.nrel.gov/raw/PRAS/PLEXOS2PRAS/v0.2.0/environment.yml
 
 # Install and activate the environment
 module load conda

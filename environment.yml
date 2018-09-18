@@ -12,4 +12,4 @@ dependencies:
   - julia
   - pip:
     - https://github.nrel.gov/PCM/h5plexos/archive/master.zip
-    - https://github.nrel.gov/ResourceAdequacySuite/PLEXOS2PRAS/archive/master.zip
+    - https://github.nrel.gov/ResourceAdequacySuite/PLEXOS2PRAS/archive/v0.2.0.zip
