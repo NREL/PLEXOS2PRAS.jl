@@ -22,7 +22,7 @@ function loadsystem(
     storspecs, storspecs_timelookup, stors_regionidx =
         process_storages(rawdata)
 
-    return ResourceAdequacy.MultiPeriodSystem{1,Hour,n_periods,Hour,MW,MWh}(
+    return ResourceAdequacy.SystemModel{1,Hour,n_periods,Hour,MW,MWh}(
         rawdata.regionnames,
         genspecs, gens_regionidx, storspecs, stors_regionidx,
         interfaces, linespecs, lines_interfaceidx,
