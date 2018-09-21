@@ -76,25 +76,36 @@ def process_workbook(infile, outfile, suffix):
     properties = remove_properties(properties,
                                    [("Generators", "x"),
                                     ("Generators", "y"),
-                                    ("Generators", "Maintenance Rate")])
+                                    ("Generators", "Maintenance Rate"),
+                                    ("Lines", "x"),
+                                    ("Lines", "y"),
+                                    ("Lines", "Maintenance Rate")])
 
     # Find all FOR property rows and convert to x
     convert_properties(properties, "Generators", "Forced Outage Rate", "x")
+    convert_properties(properties, "Lines", "Forced Outage Rate", "x")
 
     # Find all MTTR property rows and convert to y
     convert_properties(properties, "Generators", "Mean Time to Repair", "y")
+    convert_properties(properties, "Lines", "Mean Time to Repair", "y")
 
     # Add new FOR property (set to zero) for each generator object
     properties = blanket_properties(properties, objects, "Generator",
                                     "Generators", "Forced Outage Rate", 0)
+    properties = blanket_properties(properties, objects, "Line",
+                                    "Lines", "Forced Outage Rate", 0)
 
     # Add new Maintenance Rate property (set to zero) for each generator object
     properties = blanket_properties(properties, objects, "Generator",
                                     "Generators", "Maintenance Rate", 0)
+    properties = blanket_properties(properties, objects, "Line",
+                                    "Lines", "Maintenance Rate", 0)
 
     # Add new/irrelevant MTTR property (to supress PLEXOS warnings)
     properties = blanket_properties(properties, objects, "Generator",
                                     "Generators", "Mean Time to Repair", 0)
+    properties = blanket_properties(properties, objects, "Line",
+                                    "Lines", "Mean Time to Repair", 0)
 
     # Create new ST Schedule object
     objects = objects.append(pd.DataFrame({
@@ -112,6 +123,12 @@ def process_workbook(infile, outfile, suffix):
     memberships.loc[memberships["child_class"] == "ST Schedule",
                     "child_object"] = new_obj_name
 
+    # Remove memberships to other phases (LT, PASA, MT)
+    memberships.drop(memberships.index[
+        (memberships["child_class"] == "LT Plan") |
+        (memberships["child_class"] == "PASA") |
+        (memberships["child_class"] == "MT Schedule")
+    ], inplace=True)
 
     # Create new Report object
     objects = objects.append(pd.DataFrame({
@@ -121,10 +138,14 @@ def process_workbook(infile, outfile, suffix):
     # Add desired properties output
     reports = reports.append(pd.DataFrame({
         "object": new_obj_name,
-        "parent_class": ["System", "Region", "System", "System", "System"],
-        "child_class": ["Region", "Region", "Generator", "Generator", "Generator"],
-        "collection": ["Regions", "Regions", "Generators", "Generators", "Generators"],
-        "property": ["Load", "Available Transfer Capability", "Available Capacity", "x", "y"],
+        "parent_class": ["System", "System", "System", "System", "System",
+                         "System", "System", "System"],
+        "child_class": ["Region", "Interface", "Line", "Line", "Line",
+                        "Generator", "Generator", "Generator"],
+        "collection": ["Regions", "Interfaces", "Lines", "Lines", "Lines",
+                       "Generators", "Generators", "Generators"],
+        "property": ["Load", "Export Limit", "Export Limit", "x", "y",
+                     "Available Capacity", "x", "y"],
         "phase_id": 4,
         "report_period": True,
         "report_summary": False,
@@ -136,7 +157,6 @@ def process_workbook(infile, outfile, suffix):
     memberships.loc[memberships["child_class"] == "Report",
                     "child_object"] = new_obj_name
 
-
     # Add suffix to all Model names
     objects.loc[objects["class"] == "Model",
                 "name"] += new_obj_name
@@ -145,11 +165,15 @@ def process_workbook(infile, outfile, suffix):
     attributes.loc[attributes["class"] == "Model",
                    "name"] += new_obj_name
 
-    # Delete all Model dry run attributes
-    attributes = remove_attributes(attributes, [("Model", "Run Mode")])
+    # Reset relevant Model attributes
+    attributes = remove_attributes(attributes, [("Model", "Run Mode"),
+                                                ("Model", "Output to Folder"),
+                                                ("Model", "Write Input")])
 
-    # Create new Model dry run attributes
+    # Recreate relevant Model attributes to spec
     attributes = blanket_attributes(attributes, objects, "Model", "Run Mode", 1)
+    attributes = blanket_attributes(attributes, objects, "Model", "Output to Folder", -1)
+    attributes = blanket_attributes(attributes, objects, "Model", "Write Input", 0)
 
     # Save out results to new file
     with pd.ExcelWriter(outfile) as f:

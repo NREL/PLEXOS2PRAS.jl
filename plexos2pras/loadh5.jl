@@ -1,11 +1,198 @@
 using Base.Dates
 using DataFrames
 using PyCall
+using HDF5
+
 @pyimport numpy as np
 @pyimport h5py
 
+function loadh5(h5path::String, vg_categories::Vector{String},
+                exclude_categories::Vector{String})
+
+    # TODO: Would be nice to check that the necessary properties
+    # are reported before starting to load things in
+
+    # Load metadata DataFrames
+    timestamps, regions, generators, lines, interfaces = load_metadata(h5path)
+
+    regionnames = regions[:Region]
+
+    vgs_idxs, disps_idxs = partition_generators(
+        generators, vg_categories, exclude_categories)
+    vgs_region = generators[vgs_idxs, :RegionIdx]
+    disps_region = generators[disps_idxs, :RegionIdx]
+
+    lines_idxs = lines[:LineIdx]
+    lines_regions = tuple.(lines[:RegionFrom], lines[:RegionTo])
+
+    # Load time series data
+    (timestamps, demand, vgs_capacity, disps_capacity, disps_outagerate, disps_mttr,
+     lines_capacity, lines_outagerate, lines_mttr) =
+        load_data(h5path, timestamps, vgs_idxs, disps_idxs, lines_idxs)
+
+    return RawSystemData(
+        timestamps, regionnames, demand, vgs_region, vgs_capacity,
+        disps_region, disps_capacity, disps_outagerate, disps_mttr,
+        # interface_regions, interface_capacity,
+        Tuple{Int,Int}[], similar(lines_capacity, length(timestamps), 0),
+        lines_regions, lines_capacity, lines_outagerate, lines_mttr)
+
+end
+
+function load_metadata(h5path::String,
+                       dtfmt::DateFormat=dateformat"d/m/y H:M:S")
+
+    @pywith h5py.File(h5path, "r") as h5file begin
+
+        # Load timestamps
+        timestamps = Array{String}(
+            np.array(get(h5file, "metadata/times/interval")))
+        timestamps = DateTime.(timestamps, dtfmt)
+
+        #TODO: Support importing arbitrary interval lengths from PLEXOS
+        if timestamps[1] + Hour(1) != timestamps[2]
+            warn("The importer currently assumes your PLEXOS intervals are hourly" *
+                " but this doesn't seem to be the case with your data. Time-related" *
+                " reliability metrics, units, and timestamps will likely be incorrect.")
+        end
+
+        timerange = first(timestamps):Hour(1):last(timestamps)
+
+        regions = meta_dataframe(
+            h5file, "metadata/objects/region",
+            [:Region, :RegionCategory, :RegionIdx])
+
+        # Generation
+        generators = meta_dataframe(
+            h5file, "metadata/objects/generator",
+            [:Generator, :GeneratorCategory, :GeneratorIdx])
+        region_generators = meta_dataframe(
+            h5file, "metadata/relations/region_generators",
+            [:Region, :Generator, :RGIdx])
+
+        generators = join(generators, region_generators, on=:Generator)
+        generators = join(generators, regions, on=:Region)
+
+        # Ensure no duplicated generators (if so, just pick the first region)
+        if !allunique(generators[:GeneratorIdx])
+            generators =
+                by(generators,
+                   [:Generator, :GeneratorCategory, :GeneratorIdx],
+                   d -> d[1, [:Region, :RegionCategory, :RegionIdx, :RGIdx]])
+        end
+
+        # Load line data and regional relations
+        lines = meta_dataframe(
+            h5file, "metadata/objects/line",
+            [:Line, :LineCategory, :LineIdx])
+        regions_lines = meta_dataframe(
+            h5file, "metadata/relations/region_interregionallines",
+            [:Region, :Line, :RLIdx])
+        lines = join(lines, regions_lines, on=:Line)
+        lines = join(lines, regions, on=:Region)
+
+        # Filter out intraregional lines and report region IDs
+        # for interregional lines
+        lines = by(lines, [:LineIdx, :Line]) do d::AbstractDataFrame
+
+            size(d, 1) != 2 && error("Unexpected Line data:\n$d")
+
+            from, to = minmax(d[1,:RegionIdx], d[2,:RegionIdx])
+            from == to && return DataFrame(
+                RegionFrom=Int[], RegionTo=Int[])
+
+            return DataFrame(RegionFrom=from, RegionTo=to)
+
+        end
+
+
+        # TODO: Interfaces might not exist, handle this gracefully (same for lines)
+        interfaces = DataFrame(
+            Interface=String[], InterfaceCategory=String[],
+            IterfaceIdx=Int[])
+        # interfaces = meta_dataframe(
+        #    h5file, "metadata/objects/interface",
+        #    [:Interface, :InterfaceCategory, :InterfaceIdx])
+        # TODO: Determine interface to/froms
+        # region_generators = meta_dataframe(
+        #     h5file, "metadata/relations/region_generators",
+        #     [:Region, :Generator, :RGIdx])
+
+        sort!(generators, :GeneratorIdx)
+        sort!(lines, :LineIdx)
+
+        return timerange, regions, generators, lines, interfaces
+
+    end
+
+end
+
+function partition_generators(gens::DataFrame, vgs::Vector{String},
+                              excludes::Vector{String})
+
+    vg_idxs = Int[]
+    disp_idxs = Int[]
+
+    for (genidx, category) in zip(gens[:GeneratorIdx], gens[:GeneratorCategory])
+        if category ∉ excludes
+            if category ∈ vgs
+                push!(vg_idxs, genidx)
+            else
+                push!(disp_idxs, genidx)
+            end
+        end
+    end
+
+    return vg_idxs, disp_idxs
+
+end
+
+load_data(h5path::String, timestamps::StepRange, vg_idxs::Vector{Int},
+          disp_idxs::Vector{Int}, line_idxs::Vector{Int}) =
+    h5open(f -> load_data(f, timestamps, vg_idxs, disp_idxs, line_idxs), h5path, "r")
+
+function load_data(h5file::HDF5File, timestamps::StepRange,
+                   vg_idxs::Vector{Int}, disp_idxs::Vector{Int}, line_idxs::Vector{Int})
+
+    demand = load_singlebanddata(h5file, "data/ST/interval/region/Load")
+    keep_periods = .!isnan.(demand[:, 1])
+    demand = demand[keep_periods, :]
+
+    new_timestamps = timestamps[keep_periods]
+    new_timestamps = first(new_timestamps):step(timestamps):last(new_timestamps)
+
+    available_capacity = load_singlebanddata(
+        h5file, "data/ST/interval/generator/Available Capacity", keep_periods)
+
+    vg_capacity = available_capacity[:, vg_idxs]
+
+    disp_capacity = available_capacity[:, disp_idxs]
+    disp_outagerate = load_singlebanddata(
+        h5file, "data/ST/interval/generator/x", keep_periods)[:, disp_idxs]
+    disp_mttr = load_singlebanddata(
+        h5file, "data/ST/interval/generator/y", keep_periods)[:, disp_idxs]
+
+    # TODO: Check Import/Export Limits and warn / take more conservative if not symmetrical
+    line_capacity = load_singlebanddata(
+        h5file, "data/ST/interval/line/Export Limit", keep_periods)[:, line_idxs]
+    line_outagerate = load_singlebanddata(
+        h5file, "data/ST/interval/line/x", keep_periods)[:, line_idxs]
+    line_mttr = load_singlebanddata(
+        h5file, "data/ST/interval/line/y", keep_periods)[:, line_idxs]
+
+    # interface_capacity = load_singlebandda,ta(
+    #    h5file, "data/ST/interval/interface/Export Limit", keep_periods)
+    interface_capacity = similar(line_capacity, length(keep_periods), 0)
+
+    return (new_timestamps, demand, vg_capacity,
+            disp_capacity, disp_outagerate, disp_mttr,
+            line_capacity, line_outagerate, line_mttr,
+            interface_capacity)
+
+end
+
 function meta_dataframe(h5file::PyObject, path::String,
-                        columns::Vector{Symbol}=Symbol[])::DataFrame
+                        columns::Vector{Symbol}=Symbol[])
 
     h5dset = get(h5file, path)
     colnames = collect(h5dset[:dtype][:names])
@@ -21,58 +208,7 @@ function meta_dataframe(h5file::PyObject, path::String,
 
 end
 
-function load_metadata(inputpath_h5::String)
-
-    @pywith h5py.File(inputpath_h5, "r") as h5file begin
-
-        # Load timestamps
-        timestamps = Array{String}(
-            np.array(get(h5file, "metadata/times/interval")))
-        timestamps = DateTime.(timestamps, dateformat"d/m/y H:M:S")
-
-        regions = meta_dataframe(h5file,
-                                "metadata/objects/region",
-                                [:Region, :RegionCategory, :RegionIdx])
-
-        # Generation
-        generators = meta_dataframe(h5file,
-                                    "metadata/objects/generator",
-                                    [:Generator, :GeneratorCategory, :GeneratorIdx])
-        region_generators = meta_dataframe(h5file,
-                                        "metadata/relations/region_generators",
-                                        [:Region, :Generator, :RGIdx])
-
-        generators = join(generators, region_generators, on=:Generator)
-        generators = join(generators, regions, on=:Region)
-
-        # Ensure no duplicated generators (if so, just pick the first region)
-        if !allunique(generators[:GeneratorIdx])
-            generators =
-                by(generators,
-                   [:Generator, :GeneratorCategory, :GeneratorIdx],
-                   d -> d[1, [:Region, :RegionCategory, :RegionIdx, :RGIdx]])
-        end
-
-        # Transmission
-        parentregions = copy(regions)
-        names!(parentregions, [:ParentRegion, :ParentRegionCategory,
-                               :ParentRegionIdx])
-
-        childregions = copy(regions)
-        names!(childregions, [:ChildRegion, :ChildRegionCategory, :ChildRegionIdx])
-
-        region_regions = meta_dataframe(h5file,
-                                        "metadata/relations/region_regions",
-                                        [:ParentRegion, :ChildRegion, :RRIdx])
-
-        region_regions = join(region_regions, parentregions, on=:ParentRegion)
-        region_regions = join(region_regions, childregions, on=:ChildRegion)
-        sort!(region_regions, :RRIdx)
-
-        return timestamps, generators, region_regions
-
-    end
-
-end
-
 load_singlebanddata(h5file, path) = squeeze(h5file[path][1, :, :], 1)
+load_singlebanddata(h5file, path, keepperiods) =
+    load_singlebanddata(h5file, path)[keepperiods, :]
+
