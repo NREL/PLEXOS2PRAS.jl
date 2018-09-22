@@ -14,7 +14,7 @@ import os; import inspect; import plexos2pras
 print(os.path.dirname(inspect.getfile(plexos2pras)))'
 scriptpath=$(python -c "$pythoncode")
 mkdir -p $CONDA_PREFIX/etc/conda/activate.d
-echo "alias process-solutions 'julia -p auto "$scriptpath"/process_solutions.jl'" > \
+echo "alias process-solutions='julia -p auto "$scriptpath"/process_solutions.jl'" > \
     $CONDA_PREFIX/etc/conda/activate.d/set_alias.sh
 
 # Remove process-solutions alias when leaving environment
