@@ -38,7 +38,9 @@ git checkout gs-fork/gs/inplace-maxflows
 julia -e 'Pkg.resolve()'
 
 # Install PRAS
-julia -e 'Pkg.clone("https://github.com/NREL/ResourceAdequacy.jl.git"); using ResourceAdequacy'
+# This assumes you have access to the private GitHub.com repo
+# with SSH keys configured appropriately
+julia -e 'Pkg.clone("git@github.com:NREL/ResourceAdequacy.jl.git"); using ResourceAdequacy'
 
 # Install PLEXOS2PRAS Julia dependencies,
 # necessary because the Julia scripts live inside a Python module,
