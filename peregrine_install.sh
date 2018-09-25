@@ -40,6 +40,7 @@ julia -e 'Pkg.resolve()'
 # Install PRAS
 # This assumes you have access to the private GitHub.com repo
 # with SSH keys configured appropriately
+eval `ssh-agent -s`
 julia -e 'Pkg.clone("git@github.com:NREL/ResourceAdequacy.jl.git"); using ResourceAdequacy'
 
 # Install PLEXOS2PRAS Julia dependencies,
