@@ -42,6 +42,7 @@ julia -e 'Pkg.resolve()'
 # with SSH keys configured appropriately
 eval `ssh-agent -s`
 julia -e 'Pkg.clone("git@github.com:NREL/ResourceAdequacy.jl.git"); using ResourceAdequacy'
+julia -e 'Pkg.clone("git@github.nrel.gov:PRAS/CapacityValue.jl.git"); using CapacityValue'
 
 # Install PLEXOS2PRAS Julia dependencies,
 # necessary because the Julia scripts live inside a Python module,
