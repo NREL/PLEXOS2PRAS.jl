@@ -41,14 +41,23 @@ end
 function process_lines(rawdata::RawSystemData{T,V},
                        useplexosinterfaces::Bool) where {T,V}
 
-    # TODO: Respect useplexosinterfaces - load in pseudo-lines based on
-    #       PLEXOS interfaces if requested
+    if useplexosinterfaces
+        n_interfaces = length(rawdata.interfaceregions)
+        n_timesteps = length(rawdata.timestamps)
+        lineregions = rawdata.interfaceregions
+        linecapacities = rawdata.interfacecapacity
+        λ = zeros(n_timesteps, n_interfaces)
+        μ = ones(n_timesteps, n_interfaces)
+    else
+        lineregions = rawdata.lineregions
+        linecapacities = rawdata.linecapacity
+        λ, μ = plexosoutages_to_transitionprobs(rawdata.lineoutagerate, rawdata.linemttr)
+    end
 
-    interfaces = unique(rawdata.lineregions)
-    lines_interfacestart = groupstartidxs(interfaces, rawdata.lineregions)
-    λ, μ = plexosoutages_to_transitionprobs(rawdata.lineoutagerate, rawdata.linemttr)
+    interfaces = unique(lineregions)
+    lines_interfacestart = groupstartidxs(interfaces, lineregions)
     linespecs, linespecs_lookup = deduplicatespecs(
-        ResourceAdequacy.LineSpec, rawdata.linecapacity, λ, μ)
+        ResourceAdequacy.LineSpec, linecapacities, λ, μ)
 
     return interfaces, linespecs, linespecs_lookup, lines_interfacestart
 
