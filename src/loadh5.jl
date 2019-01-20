@@ -1,11 +1,3 @@
-using Base.Dates
-using DataFrames
-using PyCall
-using HDF5
-
-@pyimport numpy as np
-@pyimport h5py
-
 function loadh5(h5path::String, vg_categories::Vector{String},
                 exclude_categories::Vector{String})
 
@@ -44,11 +36,11 @@ end
 function load_metadata(h5path::String,
                        dtfmt::DateFormat=dateformat"d/m/y H:M:S")
 
-    @pywith h5py.File(h5path, "r") as h5file begin
+    @pywith h5py[:File](h5path, "r") as h5file begin
 
         # Load timestamps
         timestamps = Array{String}(
-            np.array(get(h5file, "metadata/times/interval")))
+            np[:array](get(h5file, "metadata/times/interval")))
         timestamps = DateTime.(timestamps, dtfmt)
 
         #TODO: Support importing arbitrary interval lengths from PLEXOS

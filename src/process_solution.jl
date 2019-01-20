@@ -1,6 +1,3 @@
-using PyCall
-@pyimport h5plexos.process as h5process
-
 function loadsystem(
     inputpath_zip::String,
     vg_categories::Vector{String}, exclude_categories::Vector{String},
@@ -34,7 +31,7 @@ end
 
 function h5plexos(zippath::String)
     h5path = replace(zippath, r"^(.*)\.zip$", s"\1.h5")
-    h5process.process_solution(zippath, h5path)[:close]()
+    h5process[:process_solution](zippath, h5path)[:close]()
     return h5path
 end
 
