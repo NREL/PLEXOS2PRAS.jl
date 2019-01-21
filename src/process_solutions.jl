@@ -17,6 +17,7 @@ function process_solutions(
     # Save systems to disk
     persist && jldopen(outputfile, "w") do file
         print("Writing results to $outputfile...")
+        addrequire(file, Dates)
         addrequire(file, ResourceAdequacy)
         for (systemname, system) in systems
             write(file, systemname, system)
