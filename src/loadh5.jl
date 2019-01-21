@@ -209,7 +209,7 @@ function meta_dataframe(h5file::PyObject, path::String,
 
 end
 
-load_singlebanddata(h5file, path) = squeeze(h5file[path][1, :, :], 1)
+load_singlebanddata(h5file, path) = dropdims(h5file[path][1, :, :], dims=1)
 load_singlebanddata(h5file, path, keepperiods) =
     load_singlebanddata(h5file, path)[keepperiods, :]
 

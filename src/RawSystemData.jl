@@ -82,7 +82,7 @@ function reorder!(keys::Vector, matrices::Matrix{V}...) where {V<:Real}
     old_matrix = similar(matrices[1])
 
     for matrix in matrices
-        copy!(old_matrix, matrix)
+        copyto!(old_matrix, matrix)
         for (new_col, old_col) in enumerate(neworder)
             matrix[:, new_col] = old_matrix[:, old_col]
         end
