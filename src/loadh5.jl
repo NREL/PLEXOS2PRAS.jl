@@ -97,7 +97,6 @@ function load_metadata(h5path::String,
 
         end
 
-
         interfaces = meta_dataframe(
            h5file, "metadata/objects/interface",
            [:Interface, :InterfaceCategory, :InterfaceIdx])
@@ -198,7 +197,7 @@ function meta_dataframe(h5file::PyObject, path::String,
 
     h5dset = get(h5file, path)
     colnames = collect(h5dset[:dtype][:names])
-    cols = Any[Array{String}(get(h5dset, colname))
+    cols = Any[Array{String}(PyVector(get(h5dset, colname)))
                for colname in colnames]
 
     result = DataFrame(cols, Symbol.(colnames))
