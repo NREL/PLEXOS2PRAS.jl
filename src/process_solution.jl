@@ -163,7 +163,7 @@ function deduplicatespecs(Spec::Type{<:ResourceAdequacy.AssetSpec},
             (view(rawspec, t, :) for rawspec in rawspecs)...)
 
         specshash = hash(specs_t)
-        hashidx = findfirst(isequal(hashes), specshash)
+        hashidx = findfirst(isequal(specshash), hashes)
 
         if hashidx !== nothing
             specs_lookup[t] = hashidx
