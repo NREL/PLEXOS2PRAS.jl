@@ -39,9 +39,8 @@ function load_metadata(h5path::String,
     @pywith h5py[:File](h5path, "r") as h5file begin
 
         # Load timestamps
-        timestamps = Array{String}(
-            np[:array](get(h5file, "metadata/times/interval")))
-        timestamps = DateTime.(timestamps, dtfmt)
+        timestamps = DateTime.(
+            PyVector(np[:array](get(h5file, "metadata/times/interval"))), dtfmt)
 
         #TODO: Support importing arbitrary interval lengths from PLEXOS
         if timestamps[1] + Hour(1) != timestamps[2]

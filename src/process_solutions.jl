@@ -33,7 +33,7 @@ function findsolutions(inputdir::String, suffix::String)
     rgx = Regex("^Model (.+)_" * suffix * " Solution.zip\$")
     for (folder, _, files) in walkdir(inputdir), file in files
         matchresult = match(rgx, file)
-        if !(matchresult isa Void)
+        if matchresult !== nothing
             systemname = matchresult[1]
             systempath = folder * "/" * file
             push!(solutions, (systemname, systempath))
