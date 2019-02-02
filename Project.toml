@@ -1,0 +1,12 @@
+name = "PLEXOS2PRAS"
+uuid = "23000632-8e99-4af6-adcc-f1f915ea3706"
+authors = ["Gord Stephen <gord.stephen@nrel.gov>"]
+version = "0.3.0"
+
+[deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
+JLD = "4138dd39-2aa7-5051-a626-17a0bb65d9c8"
+PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+ResourceAdequacy = "f1bff6d7-bd5f-4f25-88ac-02781f2d51b7"

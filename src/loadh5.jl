@@ -1,11 +1,3 @@
-using Base.Dates
-using DataFrames
-using PyCall
-using HDF5
-
-@pyimport numpy as np
-@pyimport h5py
-
 function loadh5(h5path::String, vg_categories::Vector{String},
                 exclude_categories::Vector{String})
 
@@ -44,12 +36,11 @@ end
 function load_metadata(h5path::String,
                        dtfmt::DateFormat=dateformat"d/m/y H:M:S")
 
-    @pywith h5py.File(h5path, "r") as h5file begin
+    @pywith h5py[:File](h5path, "r") as h5file begin
 
         # Load timestamps
-        timestamps = Array{String}(
-            np.array(get(h5file, "metadata/times/interval")))
-        timestamps = DateTime.(timestamps, dtfmt)
+        timestamps = DateTime.(
+            PyVector(np[:array](get(h5file, "metadata/times/interval"))), dtfmt)
 
         #TODO: Support importing arbitrary interval lengths from PLEXOS
         if timestamps[1] + Hour(1) != timestamps[2]
@@ -105,7 +96,6 @@ function load_metadata(h5path::String,
                 DataFrame(RegionFrom=from, RegionTo=to)
 
         end
-
 
         interfaces = meta_dataframe(
            h5file, "metadata/objects/interface",
@@ -207,7 +197,7 @@ function meta_dataframe(h5file::PyObject, path::String,
 
     h5dset = get(h5file, path)
     colnames = collect(h5dset[:dtype][:names])
-    cols = Any[Array{String}(get(h5dset, colname))
+    cols = Any[Array{String}(PyVector(get(h5dset, colname)))
                for colname in colnames]
 
     result = DataFrame(cols, Symbol.(colnames))
@@ -219,7 +209,7 @@ function meta_dataframe(h5file::PyObject, path::String,
 
 end
 
-load_singlebanddata(h5file, path) = squeeze(h5file[path][1, :, :], 1)
+load_singlebanddata(h5file, path) = dropdims(h5file[path][1, :, :], dims=1)
 load_singlebanddata(h5file, path, keepperiods) =
     load_singlebanddata(h5file, path)[keepperiods, :]
 

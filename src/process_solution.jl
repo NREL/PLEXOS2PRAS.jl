@@ -1,6 +1,3 @@
-using PyCall
-@pyimport h5plexos.process as h5process
-
 function loadsystem(
     inputpath_zip::String,
     vg_categories::Vector{String}, exclude_categories::Vector{String},
@@ -28,13 +25,13 @@ function loadsystem(
         interfaces, linespecs, lines_interfaceidx,
         rawdata.timestamps, genspecs_timelookup,
         storspecs_timelookup, linespecs_timelookup,
-        vgprofiles, rawdata.demand')
+        vgprofiles, permutedims(rawdata.demand))
 
 end
 
 function h5plexos(zippath::String)
-    h5path = replace(zippath, r"^(.*)\.zip$", s"\1.h5")
-    h5process.process_solution(zippath, h5path)[:close]()
+    h5path = replace(zippath, r"^(.*)\.zip$" => s"\1.h5")
+    h5process[:process_solution](zippath, h5path)[:close]()
     return h5path
 end
 
@@ -92,7 +89,8 @@ end
 function process_storages(rawdata::RawSystemData{T,V}) where {T,V}
     n_periods = length(rawdata.timestamps)
     n_regions = length(rawdata.regionnames)
-    return Matrix{ResourceAdequacy.StorageDeviceSpec{Float64}}(0,1), ones(Int, n_periods), ones(Int, n_regions)
+    return Matrix{ResourceAdequacy.StorageDeviceSpec{Float64}}(undef, 0, 1),
+           ones(Int, n_periods), ones(Int, n_regions)
 end
 
 function groupstartidxs(groups::Vector{T}, unitgroups::Vector{T}) where {T}
@@ -102,7 +100,7 @@ function groupstartidxs(groups::Vector{T}, unitgroups::Vector{T}) where {T}
 
     n_groups = length(groups)
     n_units = length(unitgroups)
-    groupstart_idxs = Vector{Int}(n_groups)
+    groupstart_idxs = Vector{Int}(undef, n_groups)
 
     group_idx = unit_idx = 0
     remaining_units = n_units > 0
@@ -138,11 +136,11 @@ function plexosoutages_to_transitionprobs(outagerate::Matrix{V}, mttr::Matrix{V}
 
     # TODO: Generalize to non-hourly intervals
     μ = 1 ./ mttr
-    μ[mttr .== 0] = one(V) # Interpret zero MTTR as μ = 1.
+    μ[mttr .== 0] .= one(V) # Interpret zero MTTR as μ = 1.
 
     outagerate = outagerate ./ 100
     λ = μ .* outagerate ./ (1 .- outagerate)
-    λ[outagerate .== 0] = zero(V) # Interpret zero FOR as λ = 0.
+    λ[outagerate .== 0] .= zero(V) # Interpret zero FOR as λ = 0.
 
     return λ, μ
 
@@ -155,8 +153,8 @@ function deduplicatespecs(Spec::Type{<:ResourceAdequacy.AssetSpec},
     n_assets = size(rawspecs[1], 2)
 
     hashes = UInt[]
-    specs_lookup = Vector{Int}(n_periods)
-    specs = Matrix{Spec{V}}(n_assets, n_periods)
+    specs_lookup = Vector{Int}(undef, n_periods)
+    specs = Matrix{Spec{V}}(undef, n_assets, n_periods)
     nuniques = 0
 
     for t in 1:n_periods
@@ -165,9 +163,9 @@ function deduplicatespecs(Spec::Type{<:ResourceAdequacy.AssetSpec},
             (view(rawspec, t, :) for rawspec in rawspecs)...)
 
         specshash = hash(specs_t)
-        hashidx = findfirst(hashes, specshash)
+        hashidx = findfirst(isequal(specshash), hashes)
 
-        if hashidx > 0
+        if hashidx !== nothing
             specs_lookup[t] = hashidx
         else
             push!(hashes, specshash)
