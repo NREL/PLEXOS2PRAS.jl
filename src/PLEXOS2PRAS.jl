@@ -17,7 +17,7 @@ function __init__()
     copy!(np, pyimport_conda("numpy", "numpy"))
     copy!(h5py, pyimport_conda("h5py", "h5py"))
     copy!(h5process, pyimport("h5plexos.process"))
-    pushfirst!(PyVector(pyimport("sys")["path"]), @__DIR__)
+    pushfirst!(PyVector(pyimport("sys")."path"), @__DIR__)
     copy!(processworkbook, pyimport("processworkbook"))
 end
 
