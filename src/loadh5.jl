@@ -74,7 +74,8 @@ function load_metadata(h5path::String,
         generators =
             by(generators,
                [:Generator, :GeneratorCategory, :GeneratorIdx],
-               d -> d[1, [:Region, :RegionCategory, :RegionIdx, :RGIdx]])
+               d -> (Region=d[1, :Region], RegionCategory=d[1, :RegionCategory],
+                     RegionIdx=d[1, :RegionIdx], RGIdx=d[1, :RGIdx]))
     end
 
     # Load line data and regional relations
