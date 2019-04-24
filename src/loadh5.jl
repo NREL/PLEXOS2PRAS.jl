@@ -33,96 +33,99 @@ function loadh5(h5path::String, vg_categories::Vector{String},
 
 end
 
+function load_metadata(h5file::PyObject, dtfmt::DateFormat)
+
+end
 function load_metadata(h5path::String,
                        dtfmt::DateFormat=dateformat"d/m/y H:M:S")
 
-    @pywith h5py.File(h5path, "r") as h5file begin
+    h5file = h5py.File(h5path, "r")
 
-        # Load timestamps
-        timestamps = DateTime.(
-            PyVector(np.array(get(h5file, "metadata/times/interval"))), dtfmt)
+    # Load timestamps
+    timestamps = DateTime.(
+        PyVector(np.array(get(h5file, "metadata/times/interval"))), dtfmt)
 
-        #TODO: Support importing arbitrary interval lengths from PLEXOS
-        if timestamps[1] + Hour(1) != timestamps[2]
-            warn("The importer currently assumes your PLEXOS intervals are hourly" *
-                " but this doesn't seem to be the case with your data. Time-related" *
-                " reliability metrics, units, and timestamps will likely be incorrect.")
-        end
+    #TODO: Support importing arbitrary interval lengths from PLEXOS
+    if timestamps[1] + Hour(1) != timestamps[2]
+        warn("The importer currently assumes your PLEXOS intervals are hourly" *
+            " but this doesn't seem to be the case with your data. Time-related" *
+            " reliability metrics, units, and timestamps will likely be incorrect.")
+    end
 
-        timerange = first(timestamps):Hour(1):last(timestamps)
+    timerange = first(timestamps):Hour(1):last(timestamps)
 
-        regions = meta_dataframe(
-            h5file, "metadata/objects/region",
-            [:Region, :RegionCategory, :RegionIdx])
+    regions = meta_dataframe(
+        h5file, "metadata/objects/region",
+        [:Region, :RegionCategory, :RegionIdx])
 
-        # Generation
-        generators = meta_dataframe(
-            h5file, "metadata/objects/generator",
-            [:Generator, :GeneratorCategory, :GeneratorIdx])
-        region_generators = meta_dataframe(
-            h5file, "metadata/relations/region_generators",
-            [:Region, :Generator, :RGIdx])
+    # Generation
+    generators = meta_dataframe(
+        h5file, "metadata/objects/generator",
+        [:Generator, :GeneratorCategory, :GeneratorIdx])
+    region_generators = meta_dataframe(
+        h5file, "metadata/relations/region_generators",
+        [:Region, :Generator, :RGIdx])
 
-        generators = join(generators, region_generators, on=:Generator)
-        generators = join(generators, regions, on=:Region)
+    generators = join(generators, region_generators, on=:Generator)
+    generators = join(generators, regions, on=:Region)
 
-        # Ensure no duplicated generators (if so, just pick the first region)
-        if !allunique(generators[:GeneratorIdx])
-            generators =
-                by(generators,
-                   [:Generator, :GeneratorCategory, :GeneratorIdx],
-                   d -> d[1, [:Region, :RegionCategory, :RegionIdx, :RGIdx]])
-        end
+    # Ensure no duplicated generators (if so, just pick the first region)
+    if !allunique(generators[:GeneratorIdx])
+        generators =
+            by(generators,
+               [:Generator, :GeneratorCategory, :GeneratorIdx],
+               d -> d[1, [:Region, :RegionCategory, :RegionIdx, :RGIdx]])
+    end
 
-        # Load line data and regional relations
-        lines = meta_dataframe(
-            h5file, "metadata/objects/line",
-            [:Line, :LineCategory, :LineIdx])
-        regions_lines = meta_dataframe(
-            h5file, "metadata/relations/region_interregionallines",
-            [:Region, :Line, :RLIdx])
-        lines = join(lines, regions_lines, on=:Line)
-        lines = join(lines, regions, on=:Region)
+    # Load line data and regional relations
+    lines = meta_dataframe(
+        h5file, "metadata/objects/line",
+        [:Line, :LineCategory, :LineIdx])
+    regions_lines = meta_dataframe(
+        h5file, "metadata/relations/region_interregionallines",
+        [:Region, :Line, :RLIdx])
+    lines = join(lines, regions_lines, on=:Line)
+    lines = join(lines, regions, on=:Region)
 
-        # Filter out intraregional lines and report region IDs
-        # for interregional lines
-        lines = by(lines, [:LineIdx, :Line]) do d::AbstractDataFrame
+    # Filter out intraregional lines and report region IDs
+    # for interregional lines
+    lines = by(lines, [:LineIdx, :Line]) do d::AbstractDataFrame
 
-            size(d, 1) != 2 && error("Unexpected Line data:\n$d")
+        size(d, 1) != 2 && error("Unexpected Line data:\n$d")
 
-            from, to = minmax(d[1,:RegionIdx], d[2,:RegionIdx])
-            return from == to ?
-                DataFrame(RegionFrom=Int[], RegionTo=Int[]) :
-                DataFrame(RegionFrom=from, RegionTo=to)
-
-        end
-
-        interfaces = meta_dataframe(
-           h5file, "metadata/objects/interface",
-           [:Interface, :InterfaceCategory, :InterfaceIdx])
-
-        interface_lines = meta_dataframe(
-            h5file, "metadata/relations/interface_lines",
-            [:Interface, :Line, :ILIdx])
-
-        # Filter out interfaces that aren't comprised of lines between two exclusive regions
-        interface_lines = join(interfaces, interface_lines, on=:Interface, kind=:inner)
-        interface_regions = join(interface_lines, lines, on=:Line, kind=:inner)
-        interfaces = by(interface_regions, [:InterfaceIdx, :Interface]) do d::AbstractDataFrame
-            from_tos = unique(zip(d[:RegionFrom], d[:RegionTo]))
-            # TODO: Warn about interfaces that are dropped?
-            return length(from_tos) == 1 ?
-                DataFrame(RegionFrom=from_tos[1][1], RegionTo=from_tos[1][2]) :
-                DataFrame(RegionFrom=Int[], RegionTo=Int[])
-        end
-
-        sort!(generators, :GeneratorIdx)
-        sort!(lines, :LineIdx)
-        sort!(interfaces, :InterfaceIdx)
-
-        return timerange, regions, generators, lines, interfaces
+        from, to = minmax(d[1,:RegionIdx], d[2,:RegionIdx])
+        return from == to ?
+            DataFrame(RegionFrom=Int[], RegionTo=Int[]) :
+            DataFrame(RegionFrom=from, RegionTo=to)
 
     end
+
+    interfaces = meta_dataframe(
+       h5file, "metadata/objects/interface",
+       [:Interface, :InterfaceCategory, :InterfaceIdx])
+
+    interface_lines = meta_dataframe(
+        h5file, "metadata/relations/interface_lines",
+        [:Interface, :Line, :ILIdx])
+
+    # Filter out interfaces that aren't comprised of lines between two exclusive regions
+    interface_lines = join(interfaces, interface_lines, on=:Interface, kind=:inner)
+    interface_regions = join(interface_lines, lines, on=:Line, kind=:inner)
+    interfaces = by(interface_regions, [:InterfaceIdx, :Interface]) do d::AbstractDataFrame
+        from_tos = unique(zip(d[:RegionFrom], d[:RegionTo]))
+        # TODO: Warn about interfaces that are dropped?
+        return length(from_tos) == 1 ?
+            DataFrame(RegionFrom=from_tos[1][1], RegionTo=from_tos[1][2]) :
+            DataFrame(RegionFrom=Int[], RegionTo=Int[])
+    end
+
+    sort!(generators, :GeneratorIdx)
+    sort!(lines, :LineIdx)
+    sort!(interfaces, :InterfaceIdx)
+
+    h5file.close()
+
+    return timerange, regions, generators, lines, interfaces
 
 end
 
