@@ -76,6 +76,7 @@ def process_workbook(infile, outfile, suffix):
     properties = remove_properties(properties,
                                    [("Generators", "x"),
                                     ("Generators", "y"),
+                                    ("Generators", "z"),
                                     ("Generators", "Maintenance Rate"),
                                     ("Lines", "x"),
                                     ("Lines", "y"),
@@ -88,6 +89,9 @@ def process_workbook(infile, outfile, suffix):
     # Find all MTTR property rows and convert to y
     convert_properties(properties, "Generators", "Mean Time to Repair", "y")
     convert_properties(properties, "Lines", "Mean Time to Repair", "y")
+
+    # Find all Pump Efficiency property rows and convert to z
+    convert_properties(properties, "Generators", "Pump Efficiency", "z")
 
     # Add new FOR property (set to zero) for each generator object
     properties = blanket_properties(properties, objects, "Generator",
@@ -139,13 +143,17 @@ def process_workbook(infile, outfile, suffix):
     reports = reports.append(pd.DataFrame({
         "object": new_obj_name,
         "parent_class": ["System", "System", "System", "System", "System",
-                         "System", "System", "System", "System"],
+                         "System", "System", "System", "System", "System",
+                         "System", "System"],
         "child_class": ["Region", "Interface", "Line", "Line", "Line",
-                        "Generator", "Generator", "Generator", "Generator"],
+                        "Generator", "Generator", "Generator", "Generator", "Generator",
+                        "Storage", "Storage"],
         "collection": ["Regions", "Interfaces", "Lines", "Lines", "Lines",
-                       "Generators", "Generators", "Generators", "Generators"],
+                       "Generators", "Generators", "Generators", "Generators", "Generators",
+                       "Storages", "Storages"],
         "property": ["Load", "Export Limit", "Export Limit", "x", "y",
-                     "Available Capacity", "Installed Capacity", "x", "y"],
+                     "Available Capacity", "Installed Capacity", "x", "y", "z",
+                     "Min Volume", "Max Volume"],
         "phase_id": 4,
         "report_period": True,
         "report_summary": False,
