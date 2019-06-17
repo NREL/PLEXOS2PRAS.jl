@@ -13,6 +13,12 @@ struct RawSystemData{T<:Period,V<:Real}
     dispoutagerate::Matrix{V}
     dispmttr::Matrix{V}
 
+    storregions::Vector{Int}
+    storcapacity::Matrix{V}
+    storenergy::Matrix{V}
+    storoutagerate::Matrix{V}
+    stormttr::Matrix{V}
+
     interfaceregions::Vector{Tuple{Int,Int}}
     interfacecapacity::Matrix{V}
 
@@ -31,6 +37,11 @@ struct RawSystemData{T<:Period,V<:Real}
         dispcapacity::Matrix{V},
         dispoutagerate::Matrix{V},
         dispmttr::Matrix{V},
+        storregions::Vector{Int},
+        storcapacity::Matrix{V},
+        storenergy::Matrix{V},
+        storoutagerate::Matrix{V},
+        stormttr::Matrix{V},
         interfaceregions::Vector{Tuple{Int,Int}},
         interfacecapacity::Matrix{V},
         lineregions::Vector{Tuple{Int,Int}},
@@ -42,6 +53,7 @@ struct RawSystemData{T<:Period,V<:Real}
         n_regions = length(regionnames)
         n_vg = length(vgregions)
         n_disp = length(dispregions)
+        n_stor = length(storregions)
         n_interfaces = length(interfaceregions)
         n_lines = length(lineregions)
 
@@ -52,6 +64,11 @@ struct RawSystemData{T<:Period,V<:Real}
         @assert size(dispcapacity) == (n_periods, n_disp)
         @assert size(dispoutagerate) == (n_periods, n_disp)
         @assert size(dispmttr) == (n_periods, n_disp)
+
+        @assert size(storcapacity) == (n_periods, n_stor)
+        @assert size(storenergy) == (n_periods, n_stor)
+        @assert size(storoutagerate) == (n_periods, n_stor)
+        @assert size(stormttr) == (n_periods, n_stor)
 
         @assert size(interfacecapacity) == (n_periods, n_interfaces)
 
@@ -67,6 +84,7 @@ struct RawSystemData{T<:Period,V<:Real}
         new{T,V}(timestamps, regionnames, demand,
                  vgregions, vgcapacity,
                  dispregions, dispcapacity, dispoutagerate, dispmttr,
+                 storregions, storcapacity, storenergy, storoutagerate, stormttr,
                  interfaceregions, interfacecapacity,
                  lineregions, linecapacity, lineoutagerate, linemttr)
 

@@ -5,12 +5,32 @@ function loadh5(h5path::String, vg_categories::Vector{String},
     # are reported by PLEXOS before starting to load things in
 
     # Load metadata DataFrames
-    timestamps, regions, generators, lines, interfaces = load_metadata(h5path)
+    timestamps, regions, generators, storages, lines, interfaces =
+        load_metadata(h5path)
 
     regionnames = regions[:Region]
 
     vgs_idxs, disps_idxs = partition_generators(
         generators, vg_categories, exclude_categories)
+
+    storages = by(storages, [:StorageIdx, :Storage], sort=true) do d
+
+        storname = d[1, :Storage]
+        regions = unique(d[:Region])
+
+        length(regions) > 1 && error(
+            "All generators associated with a single storage device " *
+            "should be in the same region, but device $storname had " *
+            "generators in the regions $regions")
+
+        return DataFrame(GeneratorIdxs=[d[:GeneratorIdx]], RegionIdx=d[1, :RegionIdx])
+
+    end
+
+    stors_idxs = storages[:StorageIdx]
+    stors_gen_idxs = storages[:GeneratorIdxs]
+    stors_region = storages[:RegionIdx]
+
     vgs_region = generators[vgs_idxs, :RegionIdx]
     disps_region = generators[disps_idxs, :RegionIdx]
 
@@ -22,20 +42,20 @@ function loadh5(h5path::String, vg_categories::Vector{String},
 
     # Load time series data
     (timestamps, demand, vgs_capacity, disps_capacity, disps_outagerate, disps_mttr,
+     stors_capacity, stors_energy, stors_outagerate, stors_mttr,
      lines_capacity, lines_outagerate, lines_mttr, interface_capacity) =
-        load_data(h5path, timestamps, vgs_idxs, disps_idxs, lines_idxs, interface_idxs)
+        load_data(h5path, timestamps, vgs_idxs, disps_idxs, stors_idxs,
+                  stors_gen_idxs, lines_idxs, interface_idxs)
 
     return RawSystemData(
         timestamps, regionnames, demand, vgs_region, vgs_capacity,
         disps_region, disps_capacity, disps_outagerate, disps_mttr,
+        stors_region, stors_capacity, stors_energy, stors_outagerate, stors_mttr,
         interface_regions, interface_capacity,
         lines_regions, lines_capacity, lines_outagerate, lines_mttr)
 
 end
 
-function load_metadata(h5file::PyObject, dtfmt::DateFormat)
-
-end
 function load_metadata(h5path::String,
                        dtfmt::DateFormat=dateformat"d/m/y H:M:S")
 
@@ -77,6 +97,20 @@ function load_metadata(h5path::String,
                d -> (Region=d[1, :Region], RegionCategory=d[1, :RegionCategory],
                      RegionIdx=d[1, :RegionIdx], RGIdx=d[1, :RGIdx]))
     end
+
+    # Storage
+    storages = meta_dataframe(
+        h5file, "metadata/objects/storage",
+        [:Storage, :StorageCategory, :StorageIdx])
+    generator_storages = meta_dataframe(
+        h5file, "metadata/relations/generator_headstorage",
+        [:Generator, :Storage, :GSIdx])
+
+    storages = join(storages, generator_storages, on=:Storage)
+    storages = join(storages, generators, on=:Generator)
+
+    # Remove storage devices from generators table
+    generators = join(generators, generator_storages, on=:Generator, how=:anti)
 
     # Load line data and regional relations
     lines = meta_dataframe(
@@ -121,12 +155,13 @@ function load_metadata(h5path::String,
     end
 
     sort!(generators, :GeneratorIdx)
+    sort!(storages, :StorageIdx)
     sort!(lines, :LineIdx)
     sort!(interfaces, :InterfaceIdx)
 
     h5file.close()
 
-    return timerange, regions, generators, lines, interfaces
+    return timerange, regions, generators, storages, lines, interfaces
 
 end
 
@@ -153,14 +188,17 @@ end
 load_data(h5path::String, timestamps::StepRange,
           vg_idxs::Vector{Int}, disp_idxs::Vector{Int},
           line_idxs::Vector{Int}, interface_idxs::Vector{Int}) =
-    h5open(f -> load_data(f, timestamps, vg_idxs, disp_idxs,
-                          line_idxs, interface_idxs), h5path, "r")
+    h5open(f -> load_data(f, timestamps, vg_idxs, disp_idxs, stor_idxs,
+                          stor_gen_idxs, line_idxs, interface_idxs),
+           h5path, "r")
 
-function load_data(h5file::HDF5File, timestamps::StepRange,
-                   vg_idxs::Vector{Int}, disp_idxs::Vector{Int},
-                   line_idxs::Vector{Int}, interface_idxs::Vector{Int})
+function load_data(
+    h5file::HDF5File, timestamps::StepRange, vg_idxs::Vector{Int},
+    disp_idxs::Vector{Int}, stor_idxs::Vector{Int}, stor_gen_idxs::Vector{Int},
+    line_idxs::Vector{Int}, interface_idxs::Vector{Int})
 
     demand = load_singlebanddata(h5file, "data/ST/interval/region/Load")
+    # TODO: Is this up-to-date with latest h5plexos behaviour?
     keep_periods = .!isnan.(demand[:, 1])
     demand = demand[keep_periods, :]
 
@@ -169,14 +207,41 @@ function load_data(h5file::HDF5File, timestamps::StepRange,
 
     available_capacity = load_singlebanddata(
         h5file, "data/ST/interval/generator/Available Capacity", keep_periods)
+    outagerate = load_singlebanddata(
+        h5file, "data/ST/interval/generator/x", keep_periods)
+    mttr = load_singlebanddata(
+        h5file, "data/ST/interval/generator/y", keep_periods)
 
     vg_capacity = available_capacity[:, vg_idxs]
 
     disp_capacity = available_capacity[:, disp_idxs]
-    disp_outagerate = load_singlebanddata(
-        h5file, "data/ST/interval/generator/x", keep_periods)[:, disp_idxs]
-    disp_mttr = load_singlebanddata(
-        h5file, "data/ST/interval/generator/y", keep_periods)[:, disp_idxs]
+    disp_mttr = mttr[:, disp_idxs]
+    disp_outagerate = outagerate[:, disp_idxs]
+
+    # Combine all generators sharing a head storage into a single storage device
+    # TODO: No mathematical justification for this, it's just convenient!
+    #       Ideally there would be an explicit storage-generator mapping to
+    #       obviate the need for collapsing generators down to a single device
+
+    n_stors = length(stor_idxs)
+    n_periods = length(new_timestamps)
+    stor_capacity = fill(0., n_periods, n_stors)
+    stor_outagerate = fill(-Inf, n_periods, n_stors)
+    stor_mttr = fill(-Inf, n_periods, n_stors)
+
+    for s, sgis in enumerate(stor_gen_idxs)
+        for g in sgis
+            stor_capacity[:, s] .+= available_capacity[:, g]
+            stor_outagerate[:, s] .= max.(stor_outagerate[:, s], outagerate[:, g])
+            stor_mttr[:, s] .= max.(stor_mttr[:, s], mttr[:, g])
+        end
+    end
+
+    min_storage_energy = load_singlebanddata(
+        h5file, "data/ST/interval/storage/Min Volume", keep_periods)[:, stor_idxs]
+    max_storage_energy = load_singlebanddata(
+        h5file, "data/ST/interval/storage/Max Volume", keep_periods)[:, stor_idxs]
+    stor_energy = max_storage_energy .- min_storage_energy
 
     # TODO: Check Import/Export Limits and warn / take more conservative if not symmetrical
     line_capacity = load_singlebanddata(
@@ -191,6 +256,7 @@ function load_data(h5file::HDF5File, timestamps::StepRange,
 
     return (new_timestamps, demand, vg_capacity,
             disp_capacity, disp_outagerate, disp_mttr,
+            stor_capacity, stor_energy, stor_outagerate, stor_mttr,
             line_capacity, line_outagerate, line_mttr,
             interface_capacity)
 

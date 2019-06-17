@@ -87,6 +87,7 @@ function process_dispatchable_generators(rawdata::RawSystemData{T,V}) where {T,V
 end
 
 function process_storages(rawdata::RawSystemData{T,V}) where {T,V}
+    # TODO: Update with proper storage data
     n_periods = length(rawdata.timestamps)
     n_regions = length(rawdata.regionnames)
     return Matrix{ResourceAdequacy.StorageDeviceSpec{Float64}}(undef, 0, 1),
