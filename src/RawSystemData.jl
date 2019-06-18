@@ -78,6 +78,7 @@ struct RawSystemData{T<:Period,V<:Real}
 
         reorder!(vgregions, vgcapacity)
         reorder!(dispregions, dispcapacity, dispoutagerate, dispmttr)
+        reorder!(storregions, storcapacity, storenergy, storoutagerate, stormttr)
         reorder!(interfaceregions, interfacecapacity)
         reorder!(lineregions, linecapacity, lineoutagerate, linemttr)
 
