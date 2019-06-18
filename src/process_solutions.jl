@@ -1,7 +1,8 @@
 function process_solutions(
-    inputdir::String, outputfile::String, nparalllel::Int, suffix::String,
-    vg::Vector{String}, exclude::Vector{String}, useinterfaces::Bool;
-    persist::Bool=false)
+    inputdir::String, outputfile::String;
+    useinterfaces::Bool=false, nparallel::Int=1, suffix::String="PRAS",
+    vg::Vector{String}=String[], exclude::Vector{String}=String[],
+    persist::Bool=true)
 
     # Find relevant solutions and report that they're being processed
     solutions = findsolutions(inputdir, suffix)
