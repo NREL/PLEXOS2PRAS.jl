@@ -4,7 +4,8 @@ function loadsystem(
     useplexosinterfaces::Bool)
 
     inputpath_h5 = h5plexos(inputpath_zip)
-    rawdata = loadh5(inputpath_h5, vg_categories, exclude_categories)
+    rawdata = loadh5(inputpath_h5, vg_categories, exclude_categories,
+                     useplexosinterfaces)
 
     n_periods = length(rawdata.timestamps)
 

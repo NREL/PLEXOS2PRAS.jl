@@ -1,12 +1,12 @@
 function loadh5(h5path::String, vg_categories::Vector{String},
-                exclude_categories::Vector{String})
+                exclude_categories::Vector{String}, use_interfaces::Bool)
 
     # TODO: Would be nice to check that the necessary properties
     # are reported by PLEXOS before starting to load things in
 
     # Load metadata DataFrames
     timestamps, regions, generators, storages, lines, interfaces =
-        load_metadata(h5path, exclude_categories)
+        load_metadata(h5path, exclude_categories, use_interfaces)
 
     regionnames = regions[:Region]
 
@@ -46,7 +46,7 @@ function loadh5(h5path::String, vg_categories::Vector{String},
      stors_capacity, stors_energy, stors_outagerate, stors_mttr,
      lines_capacity, lines_outagerate, lines_mttr, interface_capacity) =
         load_data(h5path, timestamps, vgs_idxs, disps_idxs, stors_idxs,
-                  stors_gen_idxs, lines_idxs, interface_idxs)
+                  stors_gen_idxs, lines_idxs, interface_idxs, use_interfaces)
 
     return RawSystemData(
         timestamps, regionnames, demand, vgs_region, vgs_capacity,
@@ -58,6 +58,7 @@ function loadh5(h5path::String, vg_categories::Vector{String},
 end
 
 function load_metadata(h5path::String, excludes::Vector{String},
+                       use_interfaces::Bool,
                        dtfmt::DateFormat=dateformat"d/m/y H:M:S")
 
     h5file = h5py.File(h5path, "r")
@@ -138,29 +139,39 @@ function load_metadata(h5path::String, excludes::Vector{String},
 
     end
 
-    interfaces = meta_dataframe(
-       h5file, "metadata/objects/interface",
-       [:Interface, :InterfaceCategory, :InterfaceIdx])
+    if use_interfaces
 
-    interface_lines = meta_dataframe(
-        h5file, "metadata/relations/interface_lines",
-        [:Interface, :Line, :ILIdx])
+        interfaces = meta_dataframe(
+           h5file, "metadata/objects/interface",
+           [:Interface, :InterfaceCategory, :InterfaceIdx])
 
-    # Filter out interfaces that aren't comprised of lines between two exclusive regions
-    interface_lines = join(interfaces, interface_lines, on=:Interface, kind=:inner)
-    interface_regions = join(interface_lines, lines, on=:Line, kind=:inner)
-    interfaces = by(interface_regions, [:InterfaceIdx, :Interface]) do d::AbstractDataFrame
-        from_tos = unique(zip(d[:RegionFrom], d[:RegionTo]))
-        # TODO: Warn about interfaces that are dropped?
-        return length(from_tos) == 1 ?
-            DataFrame(RegionFrom=from_tos[1][1], RegionTo=from_tos[1][2]) :
-            DataFrame(RegionFrom=Int[], RegionTo=Int[])
+        interface_lines = meta_dataframe(
+            h5file, "metadata/relations/interface_lines",
+            [:Interface, :Line, :ILIdx])
+
+        # Filter out interfaces that aren't comprised of lines between two exclusive regions
+        interface_lines = join(interfaces, interface_lines, on=:Interface, kind=:inner)
+        interface_regions = join(interface_lines, lines, on=:Line, kind=:inner)
+        interfaces = by(interface_regions, [:InterfaceIdx, :Interface]) do d::AbstractDataFrame
+            from_tos = unique(zip(d[:RegionFrom], d[:RegionTo]))
+            # TODO: Warn about interfaces that are dropped?
+            return length(from_tos) == 1 ?
+                DataFrame(RegionFrom=from_tos[1][1], RegionTo=from_tos[1][2]) :
+                DataFrame(RegionFrom=Int[], RegionTo=Int[])
+        end
+
+        sort!(interfaces, :InterfaceIdx)
+
+    else
+
+        interfaces = DataFrame(InterfaceIdx=Int[], Interface=String[],
+                               RegionFrom=Int[], RegionTo=Int[])
+
     end
 
     sort!(generators, :GeneratorIdx)
     sort!(storages, :StorageIdx)
     sort!(lines, :LineIdx)
-    sort!(interfaces, :InterfaceIdx)
 
     h5file.close()
 
@@ -188,15 +199,17 @@ end
 load_data(h5path::String, timestamps::StepRange,
           vg_idxs::Vector{Int}, disp_idxs::Vector{Int},
           stor_idxs::Vector{Int}, stor_gen_idxs::Vector{<:AbstractVector{Int}},
-          line_idxs::Vector{Int}, interface_idxs::Vector{Int}) =
+          line_idxs::Vector{Int}, interface_idxs::Vector{Int},
+          use_interfaces::Bool) =
     h5open(f -> load_data(f, timestamps, vg_idxs, disp_idxs, stor_idxs,
-                          stor_gen_idxs, line_idxs, interface_idxs),
+                          stor_gen_idxs, line_idxs, interface_idxs,
+                          use_interfaces),
            h5path, "r")
 
 function load_data(
     h5file::HDF5File, timestamps::StepRange, vg_idxs::Vector{Int},
     disp_idxs::Vector{Int}, stor_idxs::Vector{Int}, stor_gen_idxs::Vector{<:AbstractVector{Int}},
-    line_idxs::Vector{Int}, interface_idxs::Vector{Int})
+    line_idxs::Vector{Int}, interface_idxs::Vector{Int}, use_interfaces::Bool)
 
     demand = load_singlebanddata(h5file, "data/ST/interval/region/Load")
     # TODO: Is this up-to-date with latest h5plexos behaviour?
@@ -225,6 +238,7 @@ function load_data(
     #       obviate the need for collapsing generators down to a single device
 
     n_stors = length(stor_idxs)
+    n_interfaces = length(interface_idxs)
     n_periods = length(new_timestamps)
     stor_capacity = fill(0., n_periods, n_stors)
     stor_outagerate = fill(-Inf, n_periods, n_stors)
@@ -252,8 +266,13 @@ function load_data(
     line_mttr = load_singlebanddata(
         h5file, "data/ST/interval/line/y", keep_periods)[:, line_idxs]
 
-    interface_capacity = load_singlebanddata(
-       h5file, "data/ST/interval/interface/Export Limit", keep_periods)[:, interface_idxs]
+    if use_interfaces
+        interface_capacity = load_singlebanddata(
+           h5file, "data/ST/interval/interface/Export Limit",
+           keep_periods)[:, interface_idxs]
+    else
+        interface_capacity = fill(NaN, n_periods, n_interfaces)
+    end
 
     return (new_timestamps, demand, vg_capacity,
             disp_capacity, disp_outagerate, disp_mttr,
