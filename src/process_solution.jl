@@ -4,7 +4,8 @@ function loadsystem(
     useplexosinterfaces::Bool)
 
     inputpath_h5 = h5plexos(inputpath_zip)
-    rawdata = loadh5(inputpath_h5, vg_categories, exclude_categories)
+    rawdata = loadh5(inputpath_h5, vg_categories, exclude_categories,
+                     useplexosinterfaces)
 
     n_periods = length(rawdata.timestamps)
 
@@ -77,6 +78,7 @@ end
 function process_dispatchable_generators(rawdata::RawSystemData{T,V}) where {T,V}
 
     n_regions = length(rawdata.regionnames)
+
     generators_regionstart = groupstartidxs(collect(1:n_regions), rawdata.dispregions)
     λ, μ = plexosoutages_to_transitionprobs(rawdata.dispoutagerate, rawdata.dispmttr)
     genspecs, genspecs_lookup = deduplicatespecs(
@@ -87,10 +89,21 @@ function process_dispatchable_generators(rawdata::RawSystemData{T,V}) where {T,V
 end
 
 function process_storages(rawdata::RawSystemData{T,V}) where {T,V}
+
     n_periods = length(rawdata.timestamps)
     n_regions = length(rawdata.regionnames)
-    return Matrix{ResourceAdequacy.StorageDeviceSpec{Float64}}(undef, 0, 1),
-           ones(Int, n_periods), ones(Int, n_regions)
+    n_storages = length(rawdata.storregions)
+
+    stors_regionstart = groupstartidxs(collect(1:n_regions), rawdata.storregions)
+    λ, μ = plexosoutages_to_transitionprobs(rawdata.storoutagerate, rawdata.stormttr)
+
+    storspecs, storspecs_lookup = deduplicatespecs(
+        ResourceAdequacy.StorageDeviceSpec,
+        rawdata.storcapacity, rawdata.storenergy,
+        ones(n_periods, n_storages), λ, μ)
+
+    return storspecs, storspecs_lookup, stors_regionstart
+
 end
 
 function groupstartidxs(groups::Vector{T}, unitgroups::Vector{T}) where {T}
