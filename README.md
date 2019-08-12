@@ -8,23 +8,18 @@ The following workflow aims to minimize the effort required:
 
 __Step 0: Prepare your environment__
 
-This will ensure your environment is ready to run both the PLEXOS import tools
-and PRAS (this means you can skip the PRAS standalone installation instructions).
+Follow the PRAS
+[installation instructions](https://nrel.github.io/PRAS/installation)
+to ensure your environment is ready to run both the PLEXOS2PRAS import tools
+and PRAS itself.
 
-To install on Peregrine, simply run:
+By default, PRAS doesn't reexport the PLEXOS2PRAS tools, so you'll need to
+explicitly add that package to your project (it should already be downloaded
+during the PRAS installation process, just not directly available for import):
 
-```sh
-curl https://github.nrel.gov/raw/PRAS/PLEXOS2PRAS/master/peregrine_install.sh | sh
 ```
-
-Note that as part of this installation process you need to be on the NREL
-network (to access github.nrel.gov), and need to have access to the private
-ResourceAdequacy.jl repository on github.com with SSH keys configured
-appropriately.
-
-On other environments, you can either appropriately modify
-`peregrine_install.sh` and run it, or step through the steps in that script
-manually.
+(v1.1) pkg> add PLEXOS2PRAS
+```
 
 __Step 1: Represent your PLEXOS system in the Excel workbook format__
 
@@ -40,10 +35,11 @@ work!
 __Step 2: Run the pre-PRAS worksheet modification utility__
 
 Once you have your PLEXOS system in an Excel workbook, run the workbook
-modification script on the file:
+modification function from a Julia script:
 
-```
-process-workbook yourworkbookname.xlsx yourworkbookname_PRAS.xlsx
+```julia
+using PLEXOS2PRAS
+process_workbook("yourworkbookname.xlsx", "yourworkbookname_PRAS.xlsx")
 ```
 
 This will create a new workbook file called `yourworkbookname_PRAS.xlsx`
@@ -73,30 +69,28 @@ unsatisfactory.
 __Step 5: Run the solution processor utility__
 
 Once you have results for all of the Models you want to represent in PRAS,
-run the solution processing script to convert them all to JLD files.
+run the solution processing function to convert them all to JLD files.
 Run this in the same folder as your XML database - the script will
 automatically find the relevant solution files, run `h5plexos` on them,
 convert the HDF5 files to PRAS systems, and save all of the systems into a
 single JLD file:
 
 ```
-process-solutions . PRAS_systems.jld
+process_solutions("folder_containing_plexos_solutions", "PRAS_systems.jld")
 ```
 
-The utility provides command-line options to exlude or define certain
+The function provides keyword arguments to exlude or define certain
 generator categories as VG, change how interregional limits are defined,
-etc. To see all these options use:
-
-```
-process-solutions --help
-```
+etc.
 
 __Step 6: Load into PRAS__
 
-You can now run PRAS as you normally would. After loading the `ResourceAdequacy` module in Julia, use the `JLD` package to load in the systems from disk:
+You can now run PRAS as you normally would. After loading the
+`PRAS` module in Julia, use the `JLD` package to load in the
+systems from disk:
 
 ```julia
-using ResourceAdequacy
+using PRAS
 using JLD
 
 # Load in the systems
@@ -105,5 +99,5 @@ model1system = systems["model1"]
 model2system = systems["model2"]
 
 # Assess the reliability of a system
-assess(REPRA(1,10), NonSequentialNetworkFlow(100_000), MinimalResult(), model1system)
+assess(Backcast(), NonSequentialNetworkFlow(100_000), MinimalResult(), model1system)
 ```
