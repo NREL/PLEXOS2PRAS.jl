@@ -1,0 +1,30 @@
+function string_table!(
+    f::HDF5File,
+    tablename::String, colnames::Vector{String},
+    data::Matrix{<:AbstractString}, strlen::Int)
+
+    ncols = size(data, 1)
+    nrows = size(data, 2)
+
+    length(colnames) == ncols ||
+        error("Column names do not match matrix dimensions")
+
+    stringtype_id = HDF5.h5t_copy(HDF5.hdf5_type_id(String))
+    HDF5.h5t_set_size(stringtype_id, strlen)
+    stringtype = HDF5Datatype(stringtype_id)
+
+    dt_id = HDF5.h5t_create(HDF5.H5T_COMPOUND, ncols * strlen)
+    for (i, colname) in enumerate(colnames)
+        HDF5.h5t_insert(dt_id, colname, (i-1)*strlen, stringtype)
+    end
+
+    rawdata = UInt8.(vcat(vec(convertstring.(data, strlen))...))
+
+    dset = d_create(f, tablename, HDF5Datatype(dt_id), dataspace((nrows,)))
+    HDF5.h5d_write(
+        dset, dt_id, HDF5.H5S_ALL, HDF5.H5S_ALL, HDF5.H5P_DEFAULT, rawdata)
+
+end
+
+convertstring(s::AbstractString, strlen::Int) =
+    Vector{Char}.(rpad(ascii(s), strlen, '\0')[1:strlen])

@@ -1,39 +1,73 @@
-function loadsystem(
-    inputpath_zip::String,
-    vg_categories::Vector{String}, exclude_categories::Vector{String},
-    useplexosinterfaces::Bool)
+function process_plexossolution(
+    inputpath_h5::String,
+    outputpath_h5::String;
+    timestep::Period=Hour(1),
+    timezone::_, # TODO
+    exclude_categories::Vector{String},
+    use_interfaces::Bool,
+    string_length::Int=128)
 
-    inputpath_h5 = h5plexos(inputpath_zip)
-    rawdata = loadh5(inputpath_h5, vg_categories, exclude_categories,
-                     useplexosinterfaces)
+    h5open(inputpath_h5, "r") do plexosfile::HDF5File
+        h5open(outputpath_h5, "w") do prasfile::HDF5File
 
-    n_periods = length(rawdata.timestamps)
+            process_metadata!(prasfile, plexosfile, timestep)
 
-    vgprofiles = aggregate_vg_regionally(rawdata)
+            process_regions!(prasfile, plexosfile, stringlength)
+            process_generators!(prasfile, plexosfile, exclude_categories, stringlength)
 
-    interfaces, linespecs, linespecs_timelookup, lines_interfaceidx =
-        process_lines(rawdata, useplexosinterfaces)
+            process_interfaces!(prasfile, plexosfile, use_interfaces, stringlength)
+            process_lines!(prasfile, plexosfile, use_interfaces, stringlength)
 
-    genspecs, genspecs_timelookup, gens_regionidx =
-        process_dispatchable_generators(rawdata)
+        end
+    end
 
-    storspecs, storspecs_timelookup, stors_regionidx =
-        process_storages(rawdata)
-
-    return ResourceAdequacy.SystemModel{n_periods,1,Hour,MW,MWh}(
-        rawdata.regionnames,
-        genspecs, gens_regionidx, storspecs, stors_regionidx,
-        interfaces, linespecs, lines_interfaceidx,
-        rawdata.timestamps, genspecs_timelookup,
-        storspecs_timelookup, linespecs_timelookup,
-        vgprofiles, permutedims(rawdata.demand))
+    return
 
 end
 
-function h5plexos(zippath::String)
-    h5path = replace(zippath, r"^(.*)\.zip$" => s"\1.h5")
-    h5process.process_solution(zippath, h5path).close()
-    return h5path
+function process_metadata!(
+    prasfile::HDF5File,
+    plexosfile::HDF5File,
+    timestep::Period)
+
+    attributes = attrs(prasfile)
+
+    attributes["pras_dataversion"] = "v0.2.1"
+
+    # TODO: Are other values possible for these units?
+    attributes["power_unit"] = "MW"
+    attributes["energy_unit"] = "MWh"
+
+    timestamps = ZonedDateTime.(
+        read(plexosfile["metadata/times/interval"]),
+        dateformat"yyyy-mm-ddTHH:MM:SSzzzzzz")
+
+    all(timestamps[1:end-1] .+ timestep .== timestamps[2:end]) ||
+        error("PLEXOS result timestep durations did not " *
+              "all match provided timestep ($timestep)")
+
+    attributes["start_timestamp"] = str(first(timestamps))
+    attributes["timestep_count"] = length(timestamps)
+    attributes["timestep_length"] = timestep.value
+    attributes["timestep_unit"] = unitsymbol(typeof(timestep))
+
+    return
+
+end
+
+function process_regions!(
+    prasfile::HDF5File, plexosfile::HDF5File, stringlength::Int)
+
+    regions = g_create(prasfile, "regions")
+
+    regionnames = plexosfile["/metadata/..."]
+    string_table(f, "_core", ["name"], regionnames, stringlength)
+
+    load = plexosfile["/data/..."]
+    regions["load"] = _
+
+    return
+
 end
 
 function process_lines(rawdata::RawSystemData{T,V},

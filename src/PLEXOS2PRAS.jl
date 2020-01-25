@@ -1,27 +1,25 @@
 module PLEXOS2PRAS
 
-using Base.Filesystem
-using Dates
-using PyCall
-using HDF5
+import Dates: Day, Hour, Minute, Second
+import TimeZones: ZonedDateTime, @tz
+import PyCall: pyimport, PyNULL, PyVector
+import HDF5: h5open, read
 using DataFrames
-using ResourceAdequacy
-using JLD
+import PRASBase: unitsymbol
 
-const np = PyNULL()
-const h5py = PyNULL()
-const h5process = PyNULL()
 const processworkbook = PyNULL()
 
 function __init__()
-    copy!(np, pyimport_conda("numpy", "numpy"))
-    copy!(h5py, pyimport_conda("h5py", "h5py"))
-    copy!(h5process, pyimport("h5plexos.process"))
+    # TODO: Port this to Julia and eliminate PyCall dependency
+    # (the overall import workflow will still use h5plexos but
+    #  it won't need to talk to Julia)
     pushfirst!(PyVector(pyimport("sys")."path"), @__DIR__)
     copy!(processworkbook, pyimport("processworkbook"))
 end
 
-export process_workbook, process_solutions
+export process_plexosworkbook, process_plexossolution
+
+include("utils.jl")
 
 # Excel input processing
 include("process_workbook.jl")
@@ -30,6 +28,5 @@ include("process_workbook.jl")
 include("RawSystemData.jl")
 include("loadh5.jl")
 include("process_solution.jl")
-include("process_solutions.jl")
 
 end

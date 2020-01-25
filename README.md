@@ -39,7 +39,7 @@ modification function from a Julia script:
 
 ```julia
 using PLEXOS2PRAS
-process_workbook("yourworkbookname.xlsx", "yourworkbookname_PRAS.xlsx")
+process_plexosworkbook("yourworkbookname.xlsx", "yourworkbookname_PRAS.xlsx")
 ```
 
 This will create a new workbook file called `yourworkbookname_PRAS.xlsx`
@@ -66,38 +66,44 @@ results match your expectations. You can manually fine-tune properties in the
 newly-created database and re-run specific Models if you find elements that are
 unsatisfactory.
 
-__Step 5: Run the solution processor utility__
+__Step 5: Run h5plexos__
 
-Once you have results for all of the Models you want to represent in PRAS,
-run the solution processing function to convert them all to JLD files.
-Run this in the same folder as your XML database - the script will
-automatically find the relevant solution files, run `h5plexos` on them,
-convert the HDF5 files to PRAS systems, and save all of the systems into a
-single JLD file:
+Once you have PLEXOS zipfiles containing results for all of the Models you want
+to represent in PRAS, run
+[`h5plexos`]()
+to convert them all to HDF5 files.
 
-```
-process_solutions("folder_containing_plexos_solutions", "PRAS_systems.jld")
+```sh
+h5plexos myplexossolution.zip
 ```
 
-The function provides keyword arguments to exlude or define certain
-generator categories as VG, change how interregional limits are defined,
+__Step 6: Run the solution processor utility__
+
+Once each PLEXOS model result is processed into an HDF5 file, run the solution
+processing function from a Julia script to generate the corresponding PRAS
+model file.
+
+```julia
+using PLEXOS2PRAS
+process_plexossolution("myplexossolution.h5", "myprasmodel.pras")
+```
+
+The function provides keyword arguments to exclude certain
+generator categories, change how interregional limits are defined,
 etc.
 
-__Step 6: Load into PRAS__
+__Step 7: Load into PRAS__
 
 You can now run PRAS as you normally would. After loading the
-`PRAS` module in Julia, use the `JLD` package to load in the
-systems from disk:
+`PRAS` module in Julia, the system representation stored in the .pras file
+can be loaded directly into a `SystemModel` struct:
 
 ```julia
 using PRAS
-using JLD
 
-# Load in the systems
-systems = load("PRAS_systems.jld")
-model1system = systems["model1"]
-model2system = systems["model2"]
+# Load in the system
+system = SystemModel("prasmodel.pras")
 
-# Assess the reliability of a system
-assess(Backcast(), NonSequentialNetworkFlow(100_000), MinimalResult(), model1system)
+# Assess the reliability of the system
+assess(Modern(samples=100_000), Minimal(), system)
 ```
