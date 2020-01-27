@@ -2,21 +2,21 @@ function process_plexossolution(
     inputpath_h5::String,
     outputpath_h5::String;
     timestep::Period=Hour(1),
-    timezone::_, # TODO
-    exclude_categories::Vector{String},
-    use_interfaces::Bool,
+    timezone::TimeZone=tz"UTC",
+    exclude_categories::Vector{String}=String[],
+    use_interfaces::Bool=false,
     string_length::Int=128)
 
     h5open(inputpath_h5, "r") do plexosfile::HDF5File
         h5open(outputpath_h5, "w") do prasfile::HDF5File
 
-            process_metadata!(prasfile, plexosfile, timestep)
+            process_metadata!(prasfile, plexosfile, timestep, timezone)
 
-            process_regions!(prasfile, plexosfile, stringlength)
-            process_generators!(prasfile, plexosfile, exclude_categories, stringlength)
+            process_regions!(prasfile, plexosfile, string_length)
+            #process_generators!(prasfile, plexosfile, exclude_categories, stringlength)
 
-            process_interfaces!(prasfile, plexosfile, use_interfaces, stringlength)
-            process_lines!(prasfile, plexosfile, use_interfaces, stringlength)
+            #process_interfaces!(prasfile, plexosfile, use_interfaces, stringlength)
+            #process_lines!(prasfile, plexosfile, use_interfaces, stringlength)
 
         end
     end
@@ -28,7 +28,8 @@ end
 function process_metadata!(
     prasfile::HDF5File,
     plexosfile::HDF5File,
-    timestep::Period)
+    timestep::Period,
+    timezone::TimeZone)
 
     attributes = attrs(prasfile)
 
@@ -39,14 +40,15 @@ function process_metadata!(
     attributes["energy_unit"] = "MWh"
 
     timestamps = ZonedDateTime.(
-        read(plexosfile["metadata/times/interval"]),
-        dateformat"yyyy-mm-ddTHH:MM:SSzzzzzz")
+        DateTime.(
+            read(plexosfile["metadata/times/interval"]),
+            dateformat"yyyy-mm-ddTHH:MM:SS"), timezone)
 
     all(timestamps[1:end-1] .+ timestep .== timestamps[2:end]) ||
         error("PLEXOS result timestep durations did not " *
               "all match provided timestep ($timestep)")
 
-    attributes["start_timestamp"] = str(first(timestamps))
+    attributes["start_timestamp"] = string(first(timestamps))
     attributes["timestep_count"] = length(timestamps)
     attributes["timestep_length"] = timestep.value
     attributes["timestep_unit"] = unitsymbol(typeof(timestep))
@@ -56,15 +58,26 @@ function process_metadata!(
 end
 
 function process_regions!(
-    prasfile::HDF5File, plexosfile::HDF5File, stringlength::Int)
+    prasfile::HDF5File, plexosfile::HDF5File,
+    stringlength::Int)
+
+    # Load required data from plexosfile
+
+    regiondata = read(plexosfile["/metadata/objects/region"])
+    load = read(plexosfile["/data/ST/interval/region/Load"])
+
+    n_regions = length(regiondata)
+    n_periods = read(attrs(prasfile)["timestep_count"])
+
+    # Save data to prasfile
 
     regions = g_create(prasfile, "regions")
 
-    regionnames = plexosfile["/metadata/..."]
-    string_table(f, "_core", ["name"], regionnames, stringlength)
+    regionnames = reshape(map(r -> r.data[1], regiondata), 1, :)
+    string_table!(regions, "_core", ["name"], regionnames, stringlength)
 
-    load = plexosfile["/data/..."]
-    regions["load"] = _
+    regions["load", "compress", 1] =
+        round.(UInt32, permutedims(reshape(load, n_periods, n_regions)))
 
     return
 

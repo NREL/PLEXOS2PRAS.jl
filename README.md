@@ -18,7 +18,7 @@ explicitly add that package to your project (it should already be downloaded
 during the PRAS installation process, just not directly available for import):
 
 ```
-(v1.1) pkg> add PLEXOS2PRAS
+(v1.3) pkg> add PLEXOS2PRAS
 ```
 
 __Step 1: Represent your PLEXOS system in the Excel workbook format__
@@ -70,7 +70,7 @@ __Step 5: Run h5plexos__
 
 Once you have PLEXOS zipfiles containing results for all of the Models you want
 to represent in PRAS, run
-[`h5plexos`]()
+[`h5plexos`](https://github.com/NREL/h5plexos)
 to convert them all to HDF5 files.
 
 ```sh
