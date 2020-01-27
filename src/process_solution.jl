@@ -5,18 +5,26 @@ function process_plexossolution(
     timezone::TimeZone=tz"UTC",
     exclude_categories::Vector{String}=String[],
     use_interfaces::Bool=false,
-    string_length::Int=128)
+    string_length::Int=128,
+    compression_level::Int=1)
 
     h5open(inputpath_h5, "r") do plexosfile::HDF5File
         h5open(outputpath_h5, "w") do prasfile::HDF5File
 
-            process_metadata!(prasfile, plexosfile, timestep, timezone)
+            process_metadata!(
+                prasfile, plexosfile, timestep, timezone)
 
-            process_regions!(prasfile, plexosfile, string_length)
-            #process_generators!(prasfile, plexosfile, exclude_categories, stringlength)
+            process_regions!(
+                prasfile, plexosfile,
+                string_length, compression_level)
 
-            #process_interfaces!(prasfile, plexosfile, use_interfaces, stringlength)
-            #process_lines!(prasfile, plexosfile, use_interfaces, stringlength)
+            #process_generators_storages!(
+                #prasfile, plexosfile,
+                #exclude_categories, string_length, compression_level)
+
+            # process_lines_interfaces!(
+            #     prasfile, plexosfile,
+            #     use_interfaces, string_length, compression_level)
 
         end
     end
@@ -59,52 +67,65 @@ end
 
 function process_regions!(
     prasfile::HDF5File, plexosfile::HDF5File,
-    stringlength::Int)
+    stringlength::Int, compressionlevel::Int)
 
     # Load required data from plexosfile
 
-    regiondata = read(plexosfile["/metadata/objects/region"])
+    regiondata = readcompound(plexosfile["/metadata/objects/region"])
     load = read(plexosfile["/data/ST/interval/region/Load"])
 
-    n_regions = length(regiondata)
+    n_regions = size(regiondata, 1)
     n_periods = read(attrs(prasfile)["timestep_count"])
 
     # Save data to prasfile
 
     regions = g_create(prasfile, "regions")
 
-    regionnames = reshape(map(r -> r.data[1], regiondata), 1, :)
-    string_table!(regions, "_core", ["name"], regionnames, stringlength)
+    string_table!(regions, "_core", regiondata[!, [:name]], stringlength)
 
-    regions["load", "compress", 1] =
+    regions["load", "compress", compressionlevel] =
         round.(UInt32, permutedims(reshape(load, n_periods, n_regions)))
 
     return
 
 end
 
-function process_lines(rawdata::RawSystemData{T,V},
-                       useplexosinterfaces::Bool) where {T,V}
+function process_lines_interfaces!(
+    prasfile::HDF5File, plexosfile::HDF5File,
+    useplexosinterfaces::Bool, stringlength::Int, compressionlevel::Int)
 
     if useplexosinterfaces
+        # Load in interface data
         n_interfaces = length(rawdata.interfaceregions)
-        n_timesteps = length(rawdata.timestamps)
         lineregions = rawdata.interfaceregions
         linecapacities = rawdata.interfacecapacity
         λ = zeros(n_timesteps, n_interfaces)
         μ = ones(n_timesteps, n_interfaces)
     else
+        # Load in line data
         lineregions = rawdata.lineregions
         linecapacities = rawdata.linecapacity
         λ, μ = plexosoutages_to_transitionprobs(rawdata.lineoutagerate, rawdata.linemttr)
     end
 
-    interfaces = unique(lineregions)
-    lines_interfacestart = groupstartidxs(interfaces, lineregions)
-    linespecs, linespecs_lookup = deduplicatespecs(
-        ResourceAdequacy.LineSpec, linecapacities, λ, μ)
+    interfaceregions = unique(lineregions)
+    n_interfaces = length(interfaces)
+    infinitecapacity = fill(typemax(UInt32), n_interfaces, n_periods)
 
-    return interfaces, linespecs, linespecs_lookup, lines_interfacestart
+    # Save data to prasfile
+
+    interfaces = g_create(prasfile, "interfaces")
+
+    string_table!(interfaces, "_core", ["region1", "region2"],
+                  interfaceregions, stringlength)
+
+    interfaces["forwardcapacity", "compress", compressionlevel] =
+        infinitecapacity
+
+    interfaces["backwardcapacity", "compress", compressionlevel] =
+        infinitecapacity
+
+    return
 
 end
 
