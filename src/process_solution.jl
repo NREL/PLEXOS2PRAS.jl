@@ -22,9 +22,9 @@ function process_plexossolution(
                 #prasfile, plexosfile,
                 #exclude_categories, string_length, compression_level)
 
-            # process_lines_interfaces!(
-            #     prasfile, plexosfile,
-            #     use_interfaces, string_length, compression_level)
+            process_lines_interfaces!(
+                prasfile, plexosfile,
+                use_interfaces, string_length, compression_level)
 
         end
     end
@@ -70,19 +70,15 @@ function process_regions!(
     stringlength::Int, compressionlevel::Int)
 
     # Load required data from plexosfile
-
     regiondata = readcompound(plexosfile["/metadata/objects/region"])
-    load = read(plexosfile["/data/ST/interval/region/Load"])
+    load = readsingleband(plexosfile["/data/ST/interval/region/Load"])
 
     n_regions = size(regiondata, 1)
     n_periods = read(attrs(prasfile)["timestep_count"])
 
     # Save data to prasfile
-
     regions = g_create(prasfile, "regions")
-
     string_table!(regions, "_core", regiondata[!, [:name]], stringlength)
-
     regions["load", "compress", compressionlevel] =
         round.(UInt32, permutedims(reshape(load, n_periods, n_regions)))
 
@@ -94,38 +90,113 @@ function process_lines_interfaces!(
     prasfile::HDF5File, plexosfile::HDF5File,
     useplexosinterfaces::Bool, stringlength::Int, compressionlevel::Int)
 
+    lineregions = readlines(plexosfile)
+
     if useplexosinterfaces
-        # Load in interface data
-        n_interfaces = length(rawdata.interfaceregions)
-        lineregions = rawdata.interfaceregions
-        linecapacities = rawdata.interfacecapacity
-        λ = zeros(n_timesteps, n_interfaces)
-        μ = ones(n_timesteps, n_interfaces)
+
+        interfaceregions = readinterfaces(plexosfile, lineregions)
+        lines_core = interfaceregions[!, [:interface, :interface_category, :region1, :region2]]
+        idx = interfaceregions.interface_idx
+
+        forwardcapacity = readsingleband(
+            plexosfile["/data/ST/interval/interface/Import Limit"], idxs)
+        backwardcapacity = readsingleband(
+            plexosfile["/data/ST/interval/interface/Export Limit"], idxs)
+
+        λ = zeros(n_interfaces, n_timesteps)
+        μ = ones(n_interfaces, n_timesteps)
+
     else
-        # Load in line data
-        lineregions = rawdata.lineregions
-        linecapacities = rawdata.linecapacity
-        λ, μ = plexosoutages_to_transitionprobs(rawdata.lineoutagerate, rawdata.linemttr)
+
+        lines_core = lineregions[!, [:line, :line_category, :region1, :region2]]
+        idxs = lineregions.line_idx
+
+        forwardcapacity = readsingleband(
+            plexosfile["/data/ST/interval/line/Import Limit"], idxs)
+        backwardcapacity = readsingleband(
+            plexosfile["/data/ST/interval/line/Export Limit"], idxs)
+
+        fors = readsingleband(plexosfile["/data/ST/interval/line/x"], idxs)
+        mttrs = readsingleband(plexosfile["/data/ST/interval/line/y"], idxs)
+        λ, μ = plexosoutages_to_transitionprobs(fors, mttrs, _timeperiod_length)
+
     end
 
-    interfaceregions = unique(lineregions)
-    n_interfaces = length(interfaces)
-    infinitecapacity = fill(typemax(UInt32), n_interfaces, n_periods)
+    names!(lines_core, [:name, :category, :region1, :region2])
+
+    interfaces_core = unique(lines[!, [:region1, :region2]])
+    infinitecapacity = fill(
+        typemax(UInt32), size(interfaces_core, 1), n_periods)
 
     # Save data to prasfile
 
+    lines = g_create(prasfile, "lines")
+    string_table!(lines, "_core", lines_core, stringlength)
+    lines["forwardcapacity", "compress", compressionlevel] =
+        round.(UInt32, forwardcapacity)
+    lines["backwardcapacity", "compress", compressionlevel] =
+        round.(UInt32, backwardcapacity)
+    lines["failureprob", "compress", compressionlevel] = λ
+    lines["repairprob", "compress", compressionlevel] = μ
+
     interfaces = g_create(prasfile, "interfaces")
-
-    string_table!(interfaces, "_core", ["region1", "region2"],
-                  interfaceregions, stringlength)
-
+    string_table!(interfaces, "_core", interfaces_core, stringlength)
     interfaces["forwardcapacity", "compress", compressionlevel] =
         infinitecapacity
-
     interfaces["backwardcapacity", "compress", compressionlevel] =
         infinitecapacity
 
     return
+
+end
+
+function readlines(f::HDF5File)
+
+    lines = readcompound(
+        f["/metadata/objects/line"],
+        [:line, :line_category])
+    lines.line_idx = 1:size(lines, 1)
+
+    region_lines = readcompound(
+        f["/metadata/relations/region_interregionallines"],
+        [:region, :line])
+
+    region_lines = join(lines, region_lines, on=:line, kind=:inner)
+
+    result = by(region_lines, [:line, :line_category, :line_idx]) do d::AbstractDataFrame
+        size(d, 1) != 2 && error("Unexpected Line data:\n$d")
+        from, to = minmax(d[1, :region], d[2, :region])
+        return from != to ?
+            DataFrame(region1=from, region2=to) :
+            DataFrame(region1=Int[], region2=Int[])
+    end
+
+    return result
+
+end
+
+function readinterfaces(f::HDF5File, line_regions::DataFrame)
+
+    interfaces = readcompound(
+        f["/metadata/objects/interface"],
+        [:interface, :interface_category])
+    interfaces.interface_idx = 1:size(interfaces, 1)
+
+    interface_lines = readcompound(
+        f["/metadata/relations/interface_lines"],
+        [:interface, :line])
+
+    interface_lines = join(interfaces, interface_lines, on=:interface, kind=:inner)
+    interface_regions = join(interface_lines, line_regions, on=:line, kind=:inner)
+
+    interfaces =
+        by(interface_regions, [:interface, :interface_category, :interface_idx]
+          ) do d::AbstractDataFrame
+        from_tos = unique(zip(d[:region1], d[:region2]))
+        return length(from_tos) == 1 ?
+            DataFrame(region1=from_tos[1][1], region2=from_tos[1][2]) :
+            DataFrame(region1=Int[], region2=Int[])
+    end
 
 end
 
@@ -171,92 +242,5 @@ function process_storages(rawdata::RawSystemData{T,V}) where {T,V}
         ones(n_periods, n_storages), λ, μ)
 
     return storspecs, storspecs_lookup, stors_regionstart
-
-end
-
-function groupstartidxs(groups::Vector{T}, unitgroups::Vector{T}) where {T}
-
-    @assert issorted(groups)
-    @assert issorted(unitgroups)
-
-    n_groups = length(groups)
-    n_units = length(unitgroups)
-    groupstart_idxs = Vector{Int}(undef, n_groups)
-
-    group_idx = unit_idx = 0
-    remaining_units = n_units > 0
-    remaining_groups = n_groups > 0
-    group = nullgroup(T)
-    unitgroup = nullgroup(T)
-
-    while remaining_groups
-
-        while unitgroup == group && remaining_units
-            unit_idx += 1
-            unitgroup = unitgroups[unit_idx]
-            unit_idx == n_units && (remaining_units = false)
-        end
-
-        while !(unitgroup == group && remaining_units) && remaining_groups
-            group_idx += 1
-            group = groups[group_idx]
-            groupstart_idxs[group_idx] = group <= unitgroup ? unit_idx : n_units + 1
-            group_idx == n_groups && (remaining_groups = false)
-        end
-
-    end
-
-    return groupstart_idxs
-
-end
-
-nullgroup(::Type{Int}) = -1
-nullgroup(::Type{NTuple{N,T}}) where {N,T} = ntuple(_ -> nullgroup(T), N)
-
-function plexosoutages_to_transitionprobs(outagerate::Matrix{V}, mttr::Matrix{V}) where {V <: Real}
-
-    # TODO: Generalize to non-hourly intervals
-    μ = 1 ./ mttr
-    μ[mttr .== 0] .= one(V) # Interpret zero MTTR as μ = 1.
-
-    outagerate = outagerate ./ 100
-    λ = μ .* outagerate ./ (1 .- outagerate)
-    λ[outagerate .== 0] .= zero(V) # Interpret zero FOR as λ = 0.
-
-    return λ, μ
-
-end
-
-function deduplicatespecs(Spec::Type{<:ResourceAdequacy.AssetSpec},
-                          rawspecs::Matrix{V}...) where {V<:Real}
-
-    n_periods = size(rawspecs[1], 1)
-    n_assets = size(rawspecs[1], 2)
-
-    hashes = UInt[]
-    specs_lookup = Vector{Int}(undef, n_periods)
-    specs = Matrix{Spec{V}}(undef, n_assets, n_periods)
-    nuniques = 0
-
-    for t in 1:n_periods
-
-        specs_t = Spec.(
-            (view(rawspec, t, :) for rawspec in rawspecs)...)
-
-        specshash = hash(specs_t)
-        hashidx = findfirst(isequal(specshash), hashes)
-
-        if hashidx !== nothing
-            specs_lookup[t] = hashidx
-        else
-            push!(hashes, specshash)
-            nuniques += 1
-            specs[:, nuniques] = specs_t
-            specs_lookup[t] = nuniques
-        end
-
-    end
-
-    return specs[:, 1:nuniques], specs_lookup
 
 end

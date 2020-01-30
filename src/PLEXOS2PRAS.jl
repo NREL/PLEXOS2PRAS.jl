@@ -1,7 +1,7 @@
 module PLEXOS2PRAS
 
 import Dates: @dateformat_str, DateTime, Hour, Period
-import DataFrames: DataFrame
+import DataFrames: AbstractDataFrame, by, DataFrame
 import TimeZones: TimeZone, @tz_str, ZonedDateTime
 import PyCall: pyimport, PyNULL, PyVector
 import HDF5

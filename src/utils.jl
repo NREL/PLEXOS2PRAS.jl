@@ -1,14 +1,27 @@
+function readsingleband(dset::HDF5.HDF5Dataset, resourceidxs::AbstractVector{Int}=Int[])
+    length(resourceidxs) == 0 && (resourceidxs = Colon())
+    data = read(dset)
+    datasize = size(data)
+    length(datasize) == 3 || error("Provided data was not three-dimensional")
+    datasize[1] == 1 || error("Provided data was not single-band")
+    return permutedims(reshape(data, datasize[2:end])[:, resourceidxs])
+end
+
 # Read to DataFrame
 
-readcompound(d::HDF5.HDF5Dataset) = readcompound(read(d))
+readcompound(d::HDF5.HDF5Dataset, colnames::Vector{Symbol}=Symbol[]) =
+    readcompound(read(d), colnames)
 
-function readcompound(rawdata::Vector{HDF5.HDF5Compound{C}}) where C
+function readcompound(
+    rawdata::Vector{HDF5.HDF5Compound{C}}, colnames::Vector{Symbol}) where C
+
+    auto_colnames = length(colnames) == 0
 
     nrows = length(rawdata)
     firstrow = first(rawdata)
 
     result = DataFrame(
-        (Symbol(string(firstrow.membername[c])) =>
+        ((auto_colnames ? Symbol(string(firstrow.membername[c])) : colnames[c]) =>
         Vector{firstrow.membertype[c]}(undef, nrows) for c in 1:C)...,
         copycols=false)
 
@@ -52,3 +65,17 @@ end
 
 convertstring(s::AbstractString, strlen::Int) =
     Vector{Char}.(rpad(ascii(s), strlen, '\0')[1:strlen])
+
+function plexosoutages_to_transitionprobs(outagerate::Matrix{V}, mttr::Matrix{V}) where {V <: Real}
+
+    # TODO: Generalize to non-hourly intervals
+    μ = 1 ./ mttr
+    μ[mttr .== 0] .= one(V) # Interpret zero MTTR as μ = 1.
+
+    outagerate = outagerate ./ 100
+    λ = μ .* outagerate ./ (1 .- outagerate)
+    λ[outagerate .== 0] .= zero(V) # Interpret zero FOR as λ = 0.
+
+    return λ, μ
+
+end
