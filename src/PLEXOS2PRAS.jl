@@ -22,6 +22,9 @@ export process_plexosworkbook, process_plexossolution
 
 include("utils.jl")
 include("process_workbook.jl")
+
+include("process_generators_storages.jl")
+include("process_lines_interfaces.jl")
 include("process_solution.jl")
 
 end

@@ -1,5 +1,4 @@
-function readsingleband(dset::HDF5.HDF5Dataset, resourceidxs::AbstractVector{Int}=Int[])
-    length(resourceidxs) == 0 && (resourceidxs = Colon())
+function readsingleband(dset::HDF5.HDF5Dataset, resourceidxs::AbstractVector{Int})
     data = read(dset)
     datasize = size(data)
     length(datasize) == 3 || error("Provided data was not three-dimensional")
