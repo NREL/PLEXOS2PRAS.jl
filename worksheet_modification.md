@@ -24,10 +24,19 @@ the following changes:
   The new Report outputs the following properties for the Interval time period:
 
     - Region: Load
-    - Generator: Available Capacity
-    - Generator: x (FOR)
-    - Generator: y (MTTR)
+    - Line: Import Limit
     - Line: Export Limit
     - Line: x (FOR)
     - Line: y (MTTR)
+    - Interface: Import Limit
     - Interface: Export Limit
+    - Generator: Available Capacity
+    - Generator: Installed Capacity
+    - Generator: x (FOR)
+    - Generator: y (MTTR)
+    - Generator: z (Pump Efficiency)
+    - Storage: Min Volume
+    - Storage: Max Volume
+    - Storage: Natural Inflow
+    - Storage: x (Loss Rate)
+

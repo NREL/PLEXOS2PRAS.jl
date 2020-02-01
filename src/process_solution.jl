@@ -73,14 +73,10 @@ function process_regions!(
     regiondata = readcompound(plexosfile["/metadata/objects/region"])
     load = readsingleband(plexosfile["/data/ST/interval/region/Load"])
 
-    n_regions = size(regiondata, 1)
-    n_periods = read(attrs(prasfile)["timestep_count"])
-
     # Save data to prasfile
     regions = g_create(prasfile, "regions")
     string_table!(regions, "_core", regiondata[!, [:name]], stringlength)
-    regions["load", "compress", compressionlevel] =
-        round.(UInt32, permutedims(reshape(load, n_periods, n_regions)))
+    regions["load", "compress", compressionlevel] = round.(UInt32, load)
 
     return
 

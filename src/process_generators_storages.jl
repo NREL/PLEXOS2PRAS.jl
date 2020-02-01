@@ -27,17 +27,97 @@ function process_generators_storages!(
 
         generators = g_create(prasfile, "generators")
         string_table!(generators, "_core", generators_core, stringlength)
-        generators["capacity", "compress", compressionlevel] = UInt32.(gen_capacity)
-        generators["failureprob", "compress", compressionlevel] = UInt32.(λ)
-        generators["repairprob", "compress", compressionlevel] = UInt32.(μ)
+        generators["capacity", "compress", compressionlevel] = round.(UInt32, gen_capacity)
+        generators["failureprob", "compress", compressionlevel] = λ
+        generators["repairprob", "compress", compressionlevel] = μ
 
     end
 
     stors_genstors = consolidatestors(plexosgens, plexosreservoirs)
+    storages_core = DataFrame(name=String[], category=String[], region=String[])
+    generatorstorages_core = deepcopy(storages_core)
 
-    if size(stors_genstors, 1) > 0
-        # split up stors and genstors
-        # preallocate relevant data matrices
+    n_stors_genstors = size(stors_genstors, 1)
+    n_periods = read(attrs(prasfile)["timestep_count"])
+
+    if n_stors_genstors > 0
+
+        raw_dischargecapacity =
+            readsingleband(plexosfile["/data/ST/interval/generator/Available Capacity"])
+        raw_chargeefficiency =
+            readsingleband(plexosfile["/data/ST/interval/generator/Pump Efficiency"])
+        raw_fors =
+            readsingleband(plexosfile["/data/ST/interval/generator/x"])
+        raw_mttrs =
+            readsingleband(plexosfile["/data/ST/interval/generator/y"])
+
+        raw_inflows =
+            readsingleband(plexosfile["/data/ST/interval/storage/Natural Inflow"])
+        raw_lossrate =
+            readsingleband(plexosfile["/data/ST/interval/storage/Loss Rate"])
+        raw_energycapacity_min =
+            readsingleband(plexosfile["/data/ST/interval/storage/Min Volume"])
+        raw_energycapacity_max =
+            readsingleband(plexosfile["/data/ST/interval/storage/Max Volume"])
+        raw_energycapacity = energycapacities_max .- energycapacities_min
+
+        inflow = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
+
+        #chargecapacity = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
+        dischargecapacity = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
+        energycapacity = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
+
+        chargeefficiency = Matrix{Float64}(undef, n_stors_genstors, n_periods)
+        #dischargeefficiency = Matrix{Float64}(undef, n_stors_genstors, n_periods)
+        carryoverefficiency = Matrix{Float64}(undef, n_stors_genstors, n_periods)
+
+        fors = Matrix{Float64}(undef, n_stors_genstors, n_periods)
+        mttrs = Matrix{Float64}(undef, n_stors_genstors, n_periods)
+
+        genstor_idx = 0
+        stor_idx = 0
+
+        for row in eachrow(stor_genstors)
+
+            row_inflows = sum(raw_inflows[:, row.reservoir_idxs], 2)
+
+            if sum(row_inflows) > 0 # device is a generatorstorage
+
+                genstor_idx += 1
+                idx = genstor_idx # populate from first row down
+                # push new row to generatorstorages_core
+
+                inflow[genstor_idx, :] = row_inflows
+                # gridwithdrawalcapacity - set to chargecapacity
+                # gridinjectioncapacity - set to dischargecapacity
+
+            else # device is just a storage
+
+                stor_idx += 1
+                idx = n_stors_genstors + 1 - genstor_idx # populate from last row up
+                # push new row to storages_core
+
+            end
+
+            # chargecapacity
+            dischargecapacity[idx, :] =
+                sum(raw_dischargecapacity[:, row.reservoir_idxs], dims=2)
+            energycapacity[idx, :] =
+                sum(raw_energycapacity[:, row.reservoir_idxs], dims=2)
+
+            # Take efficiency of worst component as efficiency for overall system
+            chargeefficiency[idx, :] =
+                minimum(raw_chargeefficiency[:, row.reservoir_idxs], dims=2)
+            # dischargeefficiency - set to 1?
+            carryoverefficiency[idx, :] =
+                1 .- maximum(raw_lossrate[:, row.reservoir_idxs], dims=2)
+
+            # Just take largest FOR and MTTR out of all associated generators
+            # as the device's FOR and MTTR
+            fors[idx, :] = maximum(raw_fors[:, row.reservoir_idxs], dims=2)
+            mttrs[idx, :] = maximum(raw_mttrs[:, row.reservoir_idxs], dims=2)
+
+        end
     end
 
 end
@@ -142,11 +222,22 @@ function consolidatestors(gens::DataFrame, reservoirs::DataFrame)
 
     storages = join(gens, gen_reservoirs, on=:generator_idx, kind=:inner)
     storages = join(storages, reservoirs, on=:reservoir_idx, kind=:inner)
-    storages = by(storages, :storage_idx) do d::DataFrame
+    storages = by(storages, :storage_idx) do d::AbstractDataFrame
 
-        stor_name = join(d[!, :generator], "_")
+        generators = unique(d[!, :generators])
+        reservoirs = unique(d[!, :reservoirs])
+        regions = unique(d[!, :region])
+
+        stor_name = join(generators, "_")
         stor_category = join(unique(d[!, :generator_category]), "_")
-        stor_region = first(unique(d[!, :region]))
+        stor_region = first(regions)
+
+        @info "Combining generators $generators and reservoirs $reservoirs" *
+              "into storage/generatorstorage device $(stor_name)"
+
+        length(regions) > 1 && @warn "Storage device $stor has components" *
+            "spanning multiple regions: $regions - the device will be " *
+            "assigned to region $stor_region"
 
         return (
             storage=stor_name, storage_category=stor_category,
