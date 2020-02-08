@@ -1,7 +1,3 @@
-import sys
-import argparse
-import re
-from os import path
 import numpy as np
 import pandas as pd
 
@@ -58,7 +54,13 @@ def blanket_attributes(attrs, objs, obj_class, attr, value):
     return attrs.append(new_attrs, ignore_index=True, sort=False)
 
 
-def process_workbook(infile, outfile, suffix):
+def process_workbook(infile, outfile, suffix,
+        charge_capacities=False, charge_efficiencies=True):
+
+    if charge_capacities == charge_efficiencies
+        raise ValueError("Exactly one of " +
+                         "charge_capacities, charge_efficiencies must be true")
+    end
 
     new_obj_name = "_" + suffix
 
@@ -72,12 +74,13 @@ def process_workbook(infile, outfile, suffix):
         reports = f.parse("Reports")
 
 
-    # Remove x, y, and Maintenance Rate properties
+    # Remove x, y, z, and Maintenance Rate properties
     properties = remove_properties(properties,
                                    [("Generators", "x"),
                                     ("Generators", "y"),
                                     ("Generators", "z"),
                                     ("Generators", "Maintenance Rate"),
+                                    ("Storages", "x"),
                                     ("Lines", "x"),
                                     ("Lines", "y"),
                                     ("Lines", "Maintenance Rate")])
@@ -90,8 +93,12 @@ def process_workbook(infile, outfile, suffix):
     convert_properties(properties, "Generators", "Mean Time to Repair", "y")
     convert_properties(properties, "Lines", "Mean Time to Repair", "y")
 
-    # Find all Pump Efficiency property rows and convert to z
-    convert_properties(properties, "Generators", "Pump Efficiency", "z")
+    # Find all Pump Load (or Efficiency) property rows and convert to z
+    z_property = "Pump Load" if charge_capacities else "Pump Efficiency"
+    convert_properties(properties, "Generators", z_property, "z")
+
+    # Find all Loss Rate property rows and convert to x
+    convert_properties(properties, "Storages", "Loss Rate", "x")
 
     # Add new FOR property (set to zero) for each generator object
     properties = blanket_properties(properties, objects, "Generator",
@@ -144,19 +151,19 @@ def process_workbook(infile, outfile, suffix):
         "object": new_obj_name,
         "parent_class": ["System", "System", "System", "System", "System",
                          "System", "System", "System", "System", "System",
-                         "System", "System"],
+                         "System", "System", "System", "System"],
         "child_class": ["Region", "Interface", "Interface",
                         "Line", "Line", "Line", "Line",
                         "Generator", "Generator", "Generator", "Generator", "Generator",
-                        "Storage", "Storage"],
+                        "Storage", "Storage", "Storage", "Storage"],
         "collection": ["Regions", "Interfaces", "Interfaces",
                        "Lines", "Lines", "Lines", "Lines",
                        "Generators", "Generators", "Generators", "Generators", "Generators",
-                       "Storages", "Storages"],
+                       "Storages", "Storages", "Storages", "Storages"],
         "property": ["Load", "Import Limit", "Export Limit",
                      "Import Limit", "Export Limit", "x", "y",
                      "Available Capacity", "Installed Capacity", "x", "y", "z",
-                     "Min Volume", "Max Volume"],
+                     "Min Volume", "Max Volume", "Natural Inflow", "x"],
         "phase_id": 4,
         "report_period": True,
         "report_summary": False,

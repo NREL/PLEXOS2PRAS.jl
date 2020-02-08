@@ -4,12 +4,20 @@ The worksheet modification utility creates a copy of the input database with
 the following changes:
 
  - The pass-through output property `x` for each Generator and Line object
-   is assigned (or reassigned, if already in use) to mirror each Generator's
-   Forced Outage Rate input property.
+   is assigned (or reassigned, if already in use) to mirror each Generator or
+   Line's Forced Outage Rate input property.
+
+ - The pass-through output property `x` for each Storage object
+   is assigned (or reassigned, if already in use) to mirror each Storage's
+   Loss Rate input property.
 
  - The pass-through output property `y` for each Generator and Line object
+   is assigned (or reassigned, if already in use) to mirror each Generator or
+   Line's Mean Time to Repair input property.
+
+ - The pass-through output property `z` for each Generator object
    is assigned (or reassigned, if already in use) to mirror each Generator's
-   Mean Time to Repair input property.
+   Pump Efficiency input property.
 
 - The Forced Outage Rate for each Generator and Line object is set to zero.
 
@@ -34,7 +42,7 @@ the following changes:
     - Generator: Installed Capacity
     - Generator: x (FOR)
     - Generator: y (MTTR)
-    - Generator: z (Pump Efficiency)
+    - Generator: z (Pump Efficiency or Pump Load)
     - Storage: Min Volume
     - Storage: Max Volume
     - Storage: Natural Inflow

@@ -5,8 +5,14 @@ function process_plexossolution(
     timezone::TimeZone=tz"UTC",
     exclude_categories::Vector{String}=String[],
     use_interfaces::Bool=false,
+    charge_capacities::Bool=false,
+    carryover_efficiencies::Bool=true,
     string_length::Int=64,
     compression_level::Int=1)
+
+    xor(charge_capacities, carryover_efficiencies) ||
+        @error("Only one of charge_capacities, carryover_efficiencies " *
+               "can be selected as true.")
 
     h5open(inputpath_h5, "r") do plexosfile::HDF5File
         h5open(outputpath_h5, "w") do prasfile::HDF5File
@@ -20,7 +26,8 @@ function process_plexossolution(
 
             process_generators_storages!(
                 prasfile, plexosfile,
-                exclude_categories, string_length, compression_level)
+                exclude_categories, charge_capacities,
+                string_length, compression_level)
 
             process_lines_interfaces!(
                 prasfile, plexosfile,

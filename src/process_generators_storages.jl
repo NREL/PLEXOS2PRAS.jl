@@ -15,7 +15,7 @@ function process_generators_storages!(
     gen_idxs = gens.generator_idx
     names!(generators_core, [:name, :category, :region])
 
-    if length(gen_idxs) > 0 # Save out generator data to prasfile
+    if length(gen_idxs) > 0 # Load generator data
 
         gen_capacity = readsingleband(
             plexosfile["/data/ST/interval/generator/Available Capacity"], gen_idxs)
@@ -28,8 +28,8 @@ function process_generators_storages!(
         generators = g_create(prasfile, "generators")
         string_table!(generators, "_core", generators_core, stringlength)
         generators["capacity", "compress", compressionlevel] = round.(UInt32, gen_capacity)
-        generators["failureprob", "compress", compressionlevel] = λ
-        generators["repairprob", "compress", compressionlevel] = μ
+        generators["failureprobability", "compress", compressionlevel] = λ
+        generators["repairprobability", "compress", compressionlevel] = μ
 
     end
 
@@ -40,21 +40,29 @@ function process_generators_storages!(
     n_stors_genstors = size(stors_genstors, 1)
     n_periods = read(attrs(prasfile)["timestep_count"])
 
-    if n_stors_genstors > 0
+    if n_stors_genstors > 0 # Load storage and genstorage data
 
         raw_dischargecapacity =
             readsingleband(plexosfile["/data/ST/interval/generator/Available Capacity"])
-        raw_chargeefficiency =
-            readsingleband(plexosfile["/data/ST/interval/generator/Pump Efficiency"])
         raw_fors =
             readsingleband(plexosfile["/data/ST/interval/generator/x"])
         raw_mttrs =
             readsingleband(plexosfile["/data/ST/interval/generator/y"])
 
+        if charge_capacities # Generator.z is Pump Load
+            raw_chargecapacity =
+                readsingleband(plexosfile["/data/ST/interval/generator/z"])
+            raw_chargeefficiency = ones(Float64, size(raw_chargecapacity)...)
+        else # Generator.z is Pump Efficiency
+            raw_chargecapacity = raw_dischargecapacity
+            raw_chargeefficiency =
+                readsingleband(plexosfile["/data/ST/interval/generator/z"])
+        end
+
         raw_inflows =
             readsingleband(plexosfile["/data/ST/interval/storage/Natural Inflow"])
-        raw_lossrate =
-            readsingleband(plexosfile["/data/ST/interval/storage/Loss Rate"])
+        raw_carryoverefficiency = # TODO: Adjust units to time period length
+            1 .- readsingleband(plexosfile["/data/ST/interval/storage/x"])
         raw_energycapacity_min =
             readsingleband(plexosfile["/data/ST/interval/storage/Min Volume"])
         raw_energycapacity_max =
@@ -63,12 +71,12 @@ function process_generators_storages!(
 
         inflow = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
 
-        #chargecapacity = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
+        chargecapacity = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
         dischargecapacity = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
         energycapacity = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
 
         chargeefficiency = Matrix{Float64}(undef, n_stors_genstors, n_periods)
-        #dischargeefficiency = Matrix{Float64}(undef, n_stors_genstors, n_periods)
+        dischargeefficiency = ones(Float64, n_stors_genstors, n_periods)
         carryoverefficiency = Matrix{Float64}(undef, n_stors_genstors, n_periods)
 
         fors = Matrix{Float64}(undef, n_stors_genstors, n_periods)
@@ -81,15 +89,13 @@ function process_generators_storages!(
 
             row_inflows = sum(raw_inflows[:, row.reservoir_idxs], 2)
 
-            if sum(row_inflows) > 0 # device is a generatorstorage
+            if sum(row_inflows) > 0. # device is a generatorstorage
 
                 genstor_idx += 1
                 idx = genstor_idx # populate from first row down
                 # push new row to generatorstorages_core
 
                 inflow[genstor_idx, :] = row_inflows
-                # gridwithdrawalcapacity - set to chargecapacity
-                # gridinjectioncapacity - set to dischargecapacity
 
             else # device is just a storage
 
@@ -99,7 +105,8 @@ function process_generators_storages!(
 
             end
 
-            # chargecapacity
+            chargecapacity[idx, :] =
+                sum(raw_chargecapacity[:, row.reservoir_idxs], dims=2)
             dischargecapacity[idx, :] =
                 sum(raw_dischargecapacity[:, row.reservoir_idxs], dims=2)
             energycapacity[idx, :] =
@@ -108,9 +115,8 @@ function process_generators_storages!(
             # Take efficiency of worst component as efficiency for overall system
             chargeefficiency[idx, :] =
                 minimum(raw_chargeefficiency[:, row.reservoir_idxs], dims=2)
-            # dischargeefficiency - set to 1?
             carryoverefficiency[idx, :] =
-                1 .- maximum(raw_lossrate[:, row.reservoir_idxs], dims=2)
+                minimum(raw_carryoverefficiency[:, row.reservoir_idxs], dims=2)
 
             # Just take largest FOR and MTTR out of all associated generators
             # as the device's FOR and MTTR
@@ -118,6 +124,72 @@ function process_generators_storages!(
             mttrs[idx, :] = maximum(raw_mttrs[:, row.reservoir_idxs], dims=2)
 
         end
+
+        # write results to prasfile
+
+        if stor_idx > 0
+
+            stor_idxs = 1:stor_idx
+
+            storages = g_create(prasfile, "storages")
+            string_table!(storages, "_core", storages_core, stringlength)
+
+            storages["chargecapacity", "compress", compressionlevel] =
+                chargecapacity[stor_idxs, :]
+            storages["dischargecapacity", "compress", compressionlevel] =
+                dischargecapacity[stor_idxs, :]
+            storages["energycapacity", "compress", compressionlevel] =
+                energycapacity[stor_idxs, :]
+
+            storages["chargeefficiency", "compress", compressionlevel] =
+                chargeefficiency[stor_idxs, :]
+            storages["dischargeefficiency", "compress", compressionlevel] =
+                dischargeefficiency[stor_idxs, :]
+            storages["carryoverefficiency", "compress", compressionlevel] =
+                carryoverefficiency[stor_idxs, :]
+
+            storages["failureprobability", "compress", compressionlevel] =
+                λ[genstor_idxs, :]
+            storages["repairprobability", "compress", compressionlevel] =
+                μ[genstor_idxs, :]
+
+        end
+
+        if genstor_idx > 0
+
+            genstor_idxs = n_stors_genstors .- 0:(genstor_idx-1)
+
+            generatorstorages = g_create(prasfile, "generatorstorages")
+            string_table!(generatorstorages, "_core", generatorstorages_core, stringlength)
+
+            generatorstorages["inflow", "compress", compressionlevel] =
+                inflows[genstor_idxs, :]
+            generatorstorages["gridwithdrawalcapacity", "compress", compressionlevel] =
+                chargecapacity[genstor_idxs, :]
+            generatorstorages["gridinjectioncapacity", "compress", compressionlevel] =
+                dischargecapacity[genstor_idxs, :]
+
+            generatorstorages["chargecapacity", "compress", compressionlevel] =
+                chargecapacity[genstor_idxs, :]
+            generatorstorages["dischargecapacity", "compress", compressionlevel] =
+                dischargecapacity[genstor_idxs, :]
+            generatorstorages["energycapacity", "compress", compressionlevel] =
+                energycapacity[genstor_idxs, :]
+
+            generatorstorages["chargeefficiency", "compress", compressionlevel] =
+                chargeefficiency[genstor_idxs, :]
+            generatorstorages["dischargeefficiency", "compress", compressionlevel] =
+                dischargeefficiency[genstor_idxs, :]
+            generatorstorages["carryoverefficiency", "compress", compressionlevel] =
+                carryoverefficiency[genstor_idxs, :]
+
+            generatorstorages["failureprobability", "compress", compressionlevel] =
+                λ[genstor_idxs, :]
+            generatorstorages["repairprobability", "compress", compressionlevel] =
+                μ[genstor_idxs, :]
+
+         end
+
     end
 
 end
