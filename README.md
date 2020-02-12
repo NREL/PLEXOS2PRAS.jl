@@ -39,7 +39,7 @@ modification function from a Julia script:
 
 ```julia
 using PLEXOS2PRAS
-process_plexosworkbook("yourworkbookname.xlsx", "yourworkbookname_PRAS.xlsx")
+process_workbook("yourworkbookname.xlsx", "yourworkbookname_PRAS.xlsx")
 ```
 
 This will create a new workbook file called `yourworkbookname_PRAS.xlsx`
@@ -85,7 +85,7 @@ model file.
 
 ```julia
 using PLEXOS2PRAS
-process_plexossolution("myplexossolution.h5", "myprasmodel.pras")
+process_solution("myplexossolution.h5", "myprasmodel.pras")
 ```
 
 The function provides keyword arguments to exclude certain

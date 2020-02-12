@@ -1,4 +1,4 @@
-function process_plexossolution(
+function process_solution(
     inputpath_h5::String,
     outputpath_h5::String;
     timestep::Period=Hour(1),

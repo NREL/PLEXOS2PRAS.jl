@@ -1,9 +1,19 @@
-function readsingleband(dset::HDF5.HDF5Dataset, resourceidxs::AbstractVector{Int})
-    data = read(dset)
-    datasize = size(data)
+function readsingleband(
+    dset::HDF5.HDF5Dataset, resourceidxs::AbstractVector{Int}=Int[])
+
+    rawdata = read(dset)
+    datasize = size(rawdata)
     length(datasize) == 3 || error("Provided data was not three-dimensional")
     datasize[1] == 1 || error("Provided data was not single-band")
-    return permutedims(reshape(data, datasize[2:end])[:, resourceidxs])
+
+    data = reshape(rawdata, datasize[2:end])
+
+    if length(resourceidxs) > 0
+        data = data[:, resourceidxs]
+    end
+
+    return permutedims(data)
+
 end
 
 # Read to DataFrame
