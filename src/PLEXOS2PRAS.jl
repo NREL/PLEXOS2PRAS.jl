@@ -11,6 +11,8 @@ import XLSX
 export process_workbook, process_solution
 
 include("utils.jl")
+
+include("PLEXOSWorkbook.jl")
 include("process_workbook.jl")
 
 include("process_generators_storages.jl")
