@@ -75,15 +75,20 @@ end
 convertstring(s::AbstractString, strlen::Int) =
     Vector{Char}.(rpad(ascii(s), strlen, '\0')[1:strlen])
 
-function plexosoutages_to_transitionprobs(outagerate::Matrix{V}, mttr::Matrix{V}) where {V <: Real}
+function plexosoutages_to_transitionprobs(
+    for_raw::Matrix{V}, mttr_raw::Matrix{V}, timestep::T,
+) where {V <: Real, T <: Period}
 
-    # TODO: Generalize to non-hourly intervals
-    μ = 1 ./ mttr
-    μ[mttr .== 0] .= one(V) # Interpret zero MTTR as μ = 1.
+    # From PLEXOS, raw MTTR is in hours, raw FOR is a percentage
 
-    outagerate = outagerate ./ 100
-    λ = μ .* outagerate ./ (1 .- outagerate)
-    λ[outagerate .== 0] .= zero(V) # Interpret zero FOR as λ = 0.
+    mttrs = mttr_raw .* conversionfactor(Hour, T) ./ timestep.value
+
+    μ = 1 ./ mttrs
+    μ[mttrs .== 0] .= one(V) # Interpret zero MTTR as μ = 1.
+
+    fors = for_raw ./ 100
+    λ = μ .* fors ./ (1 .- fors)
+    λ[fors .== 0] .= zero(V) # Interpret zero FOR as λ = 0.
 
     return λ, μ
 

@@ -25,12 +25,12 @@ function process_solution(
                 string_length, compression_level)
 
             process_generators_storages!(
-                prasfile, plexosfile,
+                prasfile, plexosfile, timestep,
                 exclude_categories, charge_capacities,
                 string_length, compression_level)
 
             process_lines_interfaces!(
-                prasfile, plexosfile,
+                prasfile, plexosfile, timestep,
                 use_interfaces, string_length, compression_level)
 
         end

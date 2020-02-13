@@ -3,8 +3,9 @@
 # injection/withdrawal capabilities)
 
 function process_generators_storages!(
-    prasfile::HDF5File, plexosfile::HDF5File,
-    excludecategories::Vector{String}, stringlength::Int, compressionlevel::Int)
+    prasfile::HDF5File, plexosfile::HDF5File, timestep::Period,
+    excludecategories::Vector{String}, charge_capacities::Bool,
+    stringlength::Int, compressionlevel::Int)
 
     plexosgens = readgenerators(plexosfile, excludecategories)
     plexosreservoirs = readreservoirs(plexosfile)
@@ -13,7 +14,7 @@ function process_generators_storages!(
     gens = join(plexosgens, plexosreservoirs, on=:generator, kind=:anti)
     generators_core = gens[!, [:generator, :generator_category, :region]]
     gen_idxs = gens.generator_idx
-    names!(generators_core, [:name, :category, :region])
+    rename!(generators_core, [:name, :category, :region])
 
     if length(gen_idxs) > 0 # Load generator data
 
@@ -23,7 +24,7 @@ function process_generators_storages!(
             plexosfile["/data/ST/interval/generator/x"], gen_idxs)
         gen_mttr = readsingleband(
             plexosfile["/data/ST/interval/generator/y"], gen_idxs)
-        λ, μ = plexosoutages_to_transitionprobs(gen_for, gen_mttr, _timeperiod_length)
+        λ, μ = plexosoutages_to_transitionprobs(gen_for, gen_mttr, timestep)
 
         generators = g_create(prasfile, "generators")
         string_table!(generators, "_core", generators_core, stringlength)
@@ -124,6 +125,8 @@ function process_generators_storages!(
             mttrs[idx, :] = maximum(raw_mttrs[:, row.reservoir_idxs], dims=2)
 
         end
+
+        λ, μ = plexosoutages_to_transitionprobs(fors, mttrs, timestep)
 
         # write results to prasfile
 
@@ -242,7 +245,7 @@ function consolidatestors(gens::DataFrame, reservoirs::DataFrame)
                           on=:generator, kind=:inner
                          )[!, [:generator_idx, :reservoir_idx]]
 
-    gen_reservoirs.storage_idx = 0
+    gen_reservoirs.storage_idx .= 0
     npairs = size(gen_reservoirs, 1)
 
     stor_idx = 0

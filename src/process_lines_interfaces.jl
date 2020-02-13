@@ -1,5 +1,5 @@
 function process_lines_interfaces!(
-    prasfile::HDF5File, plexosfile::HDF5File,
+    prasfile::HDF5File, plexosfile::HDF5File, timestep::Period,
     useplexosinterfaces::Bool, stringlength::Int, compressionlevel::Int)
 
     lineregions = readlines(plexosfile)
@@ -38,7 +38,7 @@ function process_lines_interfaces!(
 
         fors = readsingleband(plexosfile["/data/ST/interval/line/x"], idxs)
         mttrs = readsingleband(plexosfile["/data/ST/interval/line/y"], idxs)
-        λ, μ = plexosoutages_to_transitionprobs(fors, mttrs, _timeperiod_length)
+        λ, μ = plexosoutages_to_transitionprobs(fors, mttrs, timestep)
 
     end
 
