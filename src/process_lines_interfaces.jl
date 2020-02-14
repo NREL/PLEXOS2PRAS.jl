@@ -8,7 +8,7 @@ function process_lines_interfaces!(
 
         interfaceregions = readinterfaces(plexosfile, lineregions)
         lines_core = interfaceregions[!, [:interface, :interface_category, :region1, :region2]]
-        idx = interfaceregions.interface_idx
+        idxs = interfaceregions.interface_idx
 
     else
 
@@ -17,21 +17,21 @@ function process_lines_interfaces!(
 
     end
 
-    length(idx) > 0 || return
+    length(idxs) > 0 || return
 
     if useplexosinterfaces
 
-        forwardcapacity = readsingleband(
+        forwardcapacity = .- readsingleband(
             plexosfile["/data/ST/interval/interface/Import Limit"], idxs)
         backwardcapacity = readsingleband(
             plexosfile["/data/ST/interval/interface/Export Limit"], idxs)
 
-        λ = zeros(n_interfaces, n_timesteps)
-        μ = ones(n_interfaces, n_timesteps)
+        λ = zeros(size(forwardcapacity)...)
+        μ = ones(size(forwardcapacity)...)
 
     else
 
-        forwardcapacity = readsingleband(
+        forwardcapacity = .- readsingleband(
             plexosfile["/data/ST/interval/line/Import Limit"], idxs)
         backwardcapacity = readsingleband(
             plexosfile["/data/ST/interval/line/Export Limit"], idxs)
@@ -42,11 +42,11 @@ function process_lines_interfaces!(
 
     end
 
-    names!(lines_core, [:name, :category, :region1, :region2])
+    rename!(lines_core, [:name, :category, :region1, :region2])
 
-    interfaces_core = unique(lines[!, [:region1, :region2]])
+    interfaces_core = unique(lines_core[!, [:region1, :region2]])
     infinitecapacity = fill(
-        typemax(UInt32), size(interfaces_core, 1), n_periods)
+        typemax(UInt32), size(interfaces_core, 1), size(forwardcapacity, 2))
 
     # Save data to prasfile
 
@@ -56,8 +56,8 @@ function process_lines_interfaces!(
         round.(UInt32, forwardcapacity)
     lines["backwardcapacity", "compress", compressionlevel] =
         round.(UInt32, backwardcapacity)
-    lines["failureprob", "compress", compressionlevel] = λ
-    lines["repairprob", "compress", compressionlevel] = μ
+    lines["failureprobability", "compress", compressionlevel] = λ
+    lines["repairprobability", "compress", compressionlevel] = μ
 
     interfaces = g_create(prasfile, "interfaces")
     string_table!(interfaces, "_core", interfaces_core, stringlength)
@@ -83,6 +83,7 @@ function readlines(f::HDF5File)
 
     region_lines = join(lines, region_lines, on=:line, kind=:inner)
 
+    # TODO: Need to ensure correct flow directions respected!
     result = by(region_lines, [:line, :line_category, :line_idx]) do d::AbstractDataFrame
         size(d, 1) != 2 && error("Unexpected Line data:\n$d")
         from, to = minmax(d[1, :region], d[2, :region])

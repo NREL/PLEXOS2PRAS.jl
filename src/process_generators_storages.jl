@@ -68,7 +68,7 @@ function process_generators_storages!(
             readsingleband(plexosfile["/data/ST/interval/storage/Min Volume"])
         raw_energycapacity_max =
             readsingleband(plexosfile["/data/ST/interval/storage/Max Volume"])
-        raw_energycapacity = energycapacities_max .- energycapacities_min
+        raw_energycapacity = raw_energycapacity_max .- raw_energycapacity_min
 
         inflow = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
 
@@ -86,43 +86,51 @@ function process_generators_storages!(
         genstor_idx = 0
         stor_idx = 0
 
-        for row in eachrow(stor_genstors)
+        for row in eachrow(stors_genstors)
 
-            row_inflows = sum(raw_inflows[:, row.reservoir_idxs], 2)
+            res_idxs = row.reservoir_idxs[]
+            gen_idxs = row.generator_idxs[]
+
+            row_inflows = sum(raw_inflows[res_idxs, :], dims=1)
 
             if sum(row_inflows) > 0. # device is a generatorstorage
 
                 genstor_idx += 1
                 idx = genstor_idx # populate from first row down
-                # push new row to generatorstorages_core
 
-                inflow[genstor_idx, :] = row_inflows
+                push!(generatorstorages_core,
+                      (name=row.storage, category=row.storage_category,
+                       region=row.region))
+
+                inflow[idx, :] = round.(UInt32, row_inflows)
 
             else # device is just a storage
 
                 stor_idx += 1
-                idx = n_stors_genstors + 1 - genstor_idx # populate from last row up
-                # push new row to storages_core
+                idx = n_stors_genstors + 1 - stor_idx # populate from last row up
 
+                push!(storages_core,
+                      (name=row.storage, category=row.storage_category,
+                       region=row.region))
             end
 
             chargecapacity[idx, :] =
-                sum(raw_chargecapacity[:, row.reservoir_idxs], dims=2)
+                round.(UInt32, sum(raw_chargecapacity[gen_idxs, :], dims=1))
             dischargecapacity[idx, :] =
-                sum(raw_dischargecapacity[:, row.reservoir_idxs], dims=2)
+                round.(UInt32, sum(raw_dischargecapacity[gen_idxs, :], dims=1))
             energycapacity[idx, :] =
-                sum(raw_energycapacity[:, row.reservoir_idxs], dims=2)
+                round.(UInt32, sum(raw_energycapacity[res_idxs, :], dims=1))
 
             # Take efficiency of worst component as efficiency for overall system
             chargeefficiency[idx, :] =
-                minimum(raw_chargeefficiency[:, row.reservoir_idxs], dims=2)
+                minimum(raw_chargeefficiency[gen_idxs, :], dims=1)
             carryoverefficiency[idx, :] =
-                minimum(raw_carryoverefficiency[:, row.reservoir_idxs], dims=2)
+                minimum(raw_carryoverefficiency[res_idxs, :], dims=1)
 
             # Just take largest FOR and MTTR out of all associated generators
             # as the device's FOR and MTTR
-            fors[idx, :] = maximum(raw_fors[:, row.reservoir_idxs], dims=2)
-            mttrs[idx, :] = maximum(raw_mttrs[:, row.reservoir_idxs], dims=2)
+            fors[idx, :] = maximum(raw_fors[gen_idxs, :], dims=1)
+            mttrs[idx, :] = maximum(raw_mttrs[gen_idxs, :], dims=1)
 
         end
 
@@ -152,21 +160,21 @@ function process_generators_storages!(
                 carryoverefficiency[stor_idxs, :]
 
             storages["failureprobability", "compress", compressionlevel] =
-                λ[genstor_idxs, :]
+                λ[stor_idxs, :]
             storages["repairprobability", "compress", compressionlevel] =
-                μ[genstor_idxs, :]
+                μ[stor_idxs, :]
 
         end
 
         if genstor_idx > 0
 
-            genstor_idxs = n_stors_genstors .- 0:(genstor_idx-1)
+            genstor_idxs = n_stors_genstors .- (0:(genstor_idx-1))
 
             generatorstorages = g_create(prasfile, "generatorstorages")
             string_table!(generatorstorages, "_core", generatorstorages_core, stringlength)
 
             generatorstorages["inflow", "compress", compressionlevel] =
-                inflows[genstor_idxs, :]
+                inflow[genstor_idxs, :]
             generatorstorages["gridwithdrawalcapacity", "compress", compressionlevel] =
                 chargecapacity[genstor_idxs, :]
             generatorstorages["gridinjectioncapacity", "compress", compressionlevel] =
@@ -212,7 +220,7 @@ function readgenerators(f::HDF5File, excludecategories::Vector{String})
 
     # Ensure no duplicated generators across regions
     # (if so, just pick the first region occurence)
-    if !allunique(generator_regions[!, :generator])
+    if !allunique(generator_regions.generator)
         generator_regions =
             by(generator_regions, :generator, d -> (region=d[1, :region]))
     end
@@ -240,12 +248,15 @@ end
 
 function consolidatestors(gens::DataFrame, reservoirs::DataFrame)
 
+    # gens cols: generator, generator_idx, generator_category, region
+    # reservoirs cols: reservoir, reservoir_idx, reservoir_category, generator
+
     gen_reservoirs = join(gens[!, [:generator, :generator_idx]],
                           reservoirs[!, [:generator, :reservoir_idx]],
                           on=:generator, kind=:inner
                          )[!, [:generator_idx, :reservoir_idx]]
 
-    gen_reservoirs.storage_idx .= 0
+    gen_reservoirs[!, :storage_idx] .= 0
     npairs = size(gen_reservoirs, 1)
 
     stor_idx = 0
@@ -280,6 +291,8 @@ function consolidatestors(gens::DataFrame, reservoirs::DataFrame)
                 gen_labelled = g in gs
                 res_labelled = r in rs
 
+                # TODO: May need to update storage_idx even if
+                #       no new network nodes discovered?
                 if xor(gen_labelled, res_labelled)
                     gen_labelled ? push!(rs, r) : push!(gs, g)
                     row.storage_idx = stor_idx
@@ -296,29 +309,32 @@ function consolidatestors(gens::DataFrame, reservoirs::DataFrame)
     end
 
     storages = join(gens, gen_reservoirs, on=:generator_idx, kind=:inner)
-    storages = join(storages, reservoirs, on=:reservoir_idx, kind=:inner)
+    storages = join(storages,
+                    reservoirs[!, [:reservoir_idx, :reservoir, :reservoir_category]],
+                    on=:reservoir_idx, kind=:inner)
+
     storages = by(storages, :storage_idx) do d::AbstractDataFrame
 
-        generators = unique(d[!, :generators])
-        reservoirs = unique(d[!, :reservoirs])
+        generators = unique(d[!, :generator])
+        reservoirs = unique(d[!, :reservoir])
         regions = unique(d[!, :region])
 
         stor_name = join(generators, "_")
         stor_category = join(unique(d[!, :generator_category]), "_")
         stor_region = first(regions)
 
-        @info "Combining generators $generators and reservoirs $reservoirs" *
-              "into storage/generatorstorage device $(stor_name)"
+        @info "Combining generators $generators and reservoirs $reservoirs " *
+              "into single device $(stor_name)"
 
-        length(regions) > 1 && @warn "Storage device $stor has components" *
+        length(regions) > 1 && @warn "Storage device $stor has components " *
             "spanning multiple regions: $regions - the device will be " *
             "assigned to region $stor_region"
 
         return (
             storage=stor_name, storage_category=stor_category,
             region=stor_region,
-            generator_idxs=unique(d[!, :generator_idxs]),
-            reservoir_idxs=unique(d[!, :reservoir_idxs])
+            generator_idxs=Ref(unique(d[!, :generator_idx])),
+            reservoir_idxs=Ref(unique(d[!, :reservoir_idx]))
         )
 
     end
