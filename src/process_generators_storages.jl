@@ -57,13 +57,13 @@ function process_generators_storages!(
         else # Generator.z is Pump Efficiency
             raw_chargecapacity = raw_dischargecapacity
             raw_chargeefficiency =
-                readsingleband(plexosfile["/data/ST/interval/generator/z"])
+                readsingleband(plexosfile["/data/ST/interval/generator/z"]) ./ 100
         end
 
         raw_inflows =
             readsingleband(plexosfile["/data/ST/interval/storage/Natural Inflow"])
         raw_carryoverefficiency = # TODO: Adjust units to time period length
-            1 .- readsingleband(plexosfile["/data/ST/interval/storage/x"])
+            1 .- readsingleband(plexosfile["/data/ST/interval/storage/x"]) ./ 100
         raw_energycapacity_min =
             readsingleband(plexosfile["/data/ST/interval/storage/Min Volume"])
         raw_energycapacity_max =
@@ -231,6 +231,7 @@ function readgenerators(f::HDF5File, excludecategories::Vector{String})
 
 end
 
+# TODO: If system has no storages, return empty results
 function readreservoirs(f::HDF5File)
 
     reservoirs = readcompound(
