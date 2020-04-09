@@ -42,9 +42,9 @@ function process_lines_interfaces!(
 
     end
 
-    rename!(lines_core, [:name, :category, :region1, :region2])
+    rename!(lines_core, [:name, :category, :region_from, :region_to])
 
-    interfaces_core = unique(lines_core[!, [:region1, :region2]])
+    interfaces_core = unique(lines_core[!, [:region_from, :region_to]])
     infinitecapacity = fill(
         typemax(UInt32), size(interfaces_core, 1), size(forwardcapacity, 2))
 
