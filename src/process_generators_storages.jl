@@ -224,7 +224,7 @@ function readgenerators(f::HDF5File, excludecategories::Vector{String})
     # (if so, just pick the first region occurence)
     if !allunique(generator_regions.generator)
         generator_regions =
-            by(generator_regions, :generator, d -> (region=d[1, :region]))
+            by(generator_regions, :generator, d -> (region=d[1, :region],))
     end
 
     generators = join(generators, generator_regions, on=:generator, kind=:inner)
