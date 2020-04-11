@@ -66,15 +66,16 @@ results match your expectations. You can manually fine-tune properties in the
 newly-created database and re-run specific Models if you find elements that are
 unsatisfactory.
 
-__Step 5: Run h5plexos__
+__Step 5: Run H5PLEXOS and the solution processor__
 
-Once you have PLEXOS zipfiles containing results for all of the Models you want
+Once you have a PLEXOS zipfile containing results for the Model run you want
 to represent in PRAS, run
-[`h5plexos`](https://github.com/NREL/h5plexos)
-to convert them all to HDF5 files.
+[`H5PLEXOS.process`](https://github.com/NREL/H5PLEXOS.jl)
+to convert it to an HDF5 files.
 
-```sh
-h5plexos myplexossolution.zip
+```julia
+using H5PLEXOS
+process("Model MyRun Solution.zip", "Model MyRun Solution.h5")
 ```
 
 __Step 6: Run the solution processor utility__
@@ -85,7 +86,7 @@ model file.
 
 ```julia
 using PLEXOS2PRAS
-process_solution("myplexossolution.h5", "myprasmodel.pras")
+process_solution("Model MyRun Solution.h5", "mysystem.pras")
 ```
 
 The function provides keyword arguments to exclude certain
@@ -102,7 +103,7 @@ can be loaded directly into a `SystemModel` struct:
 using PRAS
 
 # Load in the system
-system = SystemModel("prasmodel.pras")
+system = SystemModel("mysystem.pras")
 
 # Assess the reliability of the system
 assess(Modern(samples=100_000), Minimal(), system)

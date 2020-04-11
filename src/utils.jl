@@ -22,23 +22,14 @@ readcompound(d::HDF5.HDF5Dataset, colnames::Vector{Symbol}=Symbol[]) =
     readcompound(read(d), colnames)
 
 function readcompound(
-    rawdata::Vector{HDF5.HDF5Compound{C}}, colnames::Vector{Symbol}) where C
+    rawdata::Vector{<:NamedTuple}, colnames::Vector{Symbol}) where C
 
-    auto_colnames = length(colnames) == 0
-
-    nrows = length(rawdata)
-    firstrow = first(rawdata)
-
-    result = DataFrame(
-        ((auto_colnames ? Symbol(string(firstrow.membername[c])) : colnames[c]) =>
-        Vector{firstrow.membertype[c]}(undef, nrows) for c in 1:C)...,
-        copycols=false)
-
-    for i in 1:nrows
-        result[i, :] = rawdata[i].data
+    # If no colnames specified, use the default ones
+    if length(colnames) == 0
+        colnames = collect(keys(rawdata[1]))
     end
 
-    return result
+    return DataFrame((col => readvector(rawdata, i) for (i, col) in enumerate(colnames))...)
 
 end
 
@@ -92,4 +83,12 @@ function plexosoutages_to_transitionprobs(
 
     return λ, μ
 
+end
+
+function carryoverefficiency_conversion(
+    carryoverefficiency_raw::Matrix{V}, timestep::T
+) where {V <: Real, T <: Period}
+    # From PLEXOS, carryover efficiency (actually loss rate) is in % per hour
+    factor = timestep.value / conversionfactor(Hour, T)
+    return carryoverefficiency_raw .^ factor
 end

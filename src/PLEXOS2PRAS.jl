@@ -4,8 +4,8 @@ import Dates: @dateformat_str, DateTime, Hour, Period
 import DataFrames: AbstractDataFrame, by, DataFrame, rename!
 import TimeZones: TimeZone, @tz_str, ZonedDateTime
 import HDF5
-import HDF5: attrs, g_create, h5open, HDF5File, HDF5Group, read
-import PRASBase: unitsymbol, conversionfactor, SystemModel
+import HDF5: attrs, exists, g_create, h5open, HDF5File, HDF5Group, read
+import PRASBase: unitsymbol, conversionfactor, readvector
 import XLSX
 
 export process_workbook, process_solution

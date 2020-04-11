@@ -19,11 +19,11 @@ function process_generators_storages!(
     if length(gen_idxs) > 0 # Load generator data
 
         gen_capacity = readsingleband(
-            plexosfile["/data/ST/interval/generator/Available Capacity"], gen_idxs)
+            plexosfile["/data/ST/interval/generators/Available Capacity"], gen_idxs)
         gen_for = readsingleband(
-            plexosfile["/data/ST/interval/generator/x"], gen_idxs)
+            plexosfile["/data/ST/interval/generators/x"], gen_idxs)
         gen_mttr = readsingleband(
-            plexosfile["/data/ST/interval/generator/y"], gen_idxs)
+            plexosfile["/data/ST/interval/generators/y"], gen_idxs)
         λ, μ = plexosoutages_to_transitionprobs(gen_for, gen_mttr, timestep)
 
         generators = g_create(prasfile, "generators")
@@ -44,30 +44,32 @@ function process_generators_storages!(
     if n_stors_genstors > 0 # Load storage and genstorage data
 
         raw_dischargecapacity =
-            readsingleband(plexosfile["/data/ST/interval/generator/Available Capacity"])
+            readsingleband(plexosfile["/data/ST/interval/generators/Available Capacity"])
         raw_fors =
-            readsingleband(plexosfile["/data/ST/interval/generator/x"])
+            readsingleband(plexosfile["/data/ST/interval/generators/x"])
         raw_mttrs =
-            readsingleband(plexosfile["/data/ST/interval/generator/y"])
+            readsingleband(plexosfile["/data/ST/interval/generators/y"])
 
         if charge_capacities # Generator.z is Pump Load
             raw_chargecapacity =
-                readsingleband(plexosfile["/data/ST/interval/generator/z"])
+                readsingleband(plexosfile["/data/ST/interval/generators/z"])
             raw_chargeefficiency = ones(Float64, size(raw_chargecapacity)...)
         else # Generator.z is Pump Efficiency
             raw_chargecapacity = raw_dischargecapacity
             raw_chargeefficiency =
-                readsingleband(plexosfile["/data/ST/interval/generator/z"]) ./ 100
+                readsingleband(plexosfile["/data/ST/interval/generators/z"]) ./ 100
         end
 
         raw_inflows =
-            readsingleband(plexosfile["/data/ST/interval/storage/Natural Inflow"])
-        raw_carryoverefficiency = # TODO: Adjust units to time period length
-            1 .- readsingleband(plexosfile["/data/ST/interval/storage/x"]) ./ 100
+            readsingleband(plexosfile["/data/ST/interval/storages/Natural Inflow"])
+        raw_decayrate =
+            readsingleband(plexosfile["/data/ST/interval/storages/x"]) ./ 100
+        raw_carryoverefficiency =
+            carryoverefficiency_conversion(1 .- raw_decayrate, timestep)
         raw_energycapacity_min =
-            readsingleband(plexosfile["/data/ST/interval/storage/Min Volume"])
+            readsingleband(plexosfile["/data/ST/interval/storages/Min Volume"])
         raw_energycapacity_max =
-            readsingleband(plexosfile["/data/ST/interval/storage/Max Volume"])
+            readsingleband(plexosfile["/data/ST/interval/storages/Max Volume"])
         raw_energycapacity = raw_energycapacity_max .- raw_energycapacity_min
 
         inflow = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
@@ -208,7 +210,7 @@ end
 function readgenerators(f::HDF5File, excludecategories::Vector{String})
 
     generators = readcompound(
-        f["metadata/objects/generator"], [:generator, :generator_category])
+        f["metadata/objects/generators"], [:generator, :generator_category])
     generators.generator_idx = 1:size(generators, 1)
 
     generators = join(
@@ -216,7 +218,7 @@ function readgenerators(f::HDF5File, excludecategories::Vector{String})
         on=:generator_category, kind=:anti)
 
     generator_regions = readcompound(
-        f["metadata/relations/region_generators"], [:region, :generator])
+        f["metadata/relations/regions_generators"], [:region, :generator])
 
     # Ensure no duplicated generators across regions
     # (if so, just pick the first region occurence)
@@ -231,15 +233,22 @@ function readgenerators(f::HDF5File, excludecategories::Vector{String})
 
 end
 
-# TODO: If system has no storages, return empty results
 function readreservoirs(f::HDF5File)
 
+    storage_path = "metadata/objects/storages"
+    storagerel_path = "metadata/relations/exportinggenerators_headstorage"
+
+    if !exists(f, storage_path) || !exists(f, storagerel_path)
+        return DataFrame(reservoir=String[], reservoir_idx=Int[],
+                         reservoir_category=String[], generator=String[])
+    end
+
     reservoirs = readcompound(
-        f["metadata/objects/storage"], [:reservoir, :reservoir_category])
+        f[storage_path], [:reservoir, :reservoir_category])
     reservoirs.reservoir_idx = 1:size(reservoirs, 1)
 
     generator_reservoirs = readcompound(
-        f["metadata/relations/generator_headstorage"], [:generator, :reservoir])
+        f[storagerel_path], [:generator, :reservoir])
 
     reservoirs = join(reservoirs, generator_reservoirs, on=:reservoir, kind=:inner)
 
@@ -289,13 +298,12 @@ function consolidatestors(gens::DataFrame, reservoirs::DataFrame)
                 g = row.generator_idx
                 r = row.reservoir_idx
 
-                gen_labelled = g in gs
-                res_labelled = r in rs
+                gen_related = g in gs
+                res_related = r in rs
 
-                # TODO: May need to update storage_idx even if
-                #       no new network nodes discovered?
-                if xor(gen_labelled, res_labelled)
-                    gen_labelled ? push!(rs, r) : push!(gs, g)
+                if gen_related || res_related
+                    push!(gs, g)
+                    push!(rs, r)
                     row.storage_idx = stor_idx
                     changed = true
                 end

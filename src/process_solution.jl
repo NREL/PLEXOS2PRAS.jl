@@ -20,7 +20,7 @@ function process_solution(
             process_metadata!(
                 prasfile, plexosfile, timestep, timezone)
 
-            process_regions!(
+            n_regions = process_regions!(
                 prasfile, plexosfile,
                 string_length, compression_level)
 
@@ -29,7 +29,7 @@ function process_solution(
                 exclude_categories, charge_capacities,
                 string_length, compression_level)
 
-            process_lines_interfaces!(
+            n_regions > 1 && process_lines_interfaces!(
                 prasfile, plexosfile, timestep,
                 use_interfaces, string_length, compression_level)
 
@@ -46,18 +46,30 @@ function process_metadata!(
     timestep::Period,
     timezone::TimeZone)
 
+    version_message = "Only H5PLEXOS v0.6 files are supported"
+    if exists(attrs(plexosfile), "h5plexos")
+        version = read(attrs(plexosfile)["h5plexos"])
+        version_match = match(r"^v0.6.\d+$", version)
+        isnothing(version_match) && error(version_message * ", got " * version)
+    else
+        error(version_message)
+    end
+
     attributes = attrs(prasfile)
 
-    attributes["pras_dataversion"] = "v0.2.1"
+    attributes["pras_dataversion"] = "v0.5.0"
 
     # TODO: Are other values possible for these units?
     attributes["power_unit"] = "MW"
     attributes["energy_unit"] = "MWh"
 
+    dset = plexosfile["data/ST/interval/regions/Load"]
+    offset = read(attrs(dset)["period_offset"])
+    timestamp_range = offset .+ (1:size(dset, 2))
+
+    timestamps_raw = read(plexosfile["metadata/times/interval"])[timestamp_range]
     timestamps = ZonedDateTime.(
-        DateTime.(
-            read(plexosfile["metadata/times/interval"]),
-            dateformat"yyyy-mm-ddTHH:MM:SS"), timezone)
+        DateTime.(timestamps_raw, dateformat"yyyy-mm-ddTHH:MM:SS"), timezone)
 
     all(timestamps[1:end-1] .+ timestep .== timestamps[2:end]) ||
         error("PLEXOS result timestep durations did not " *
@@ -77,14 +89,16 @@ function process_regions!(
     stringlength::Int, compressionlevel::Int)
 
     # Load required data from plexosfile
-    regiondata = readcompound(plexosfile["/metadata/objects/region"])
-    load = readsingleband(plexosfile["/data/ST/interval/region/Load"])
+    regiondata = readcompound(plexosfile["/metadata/objects/regions"])
+    load = readsingleband(plexosfile["/data/ST/interval/regions/Load"])
+
+    n_regions = size(regiondata, 1)
 
     # Save data to prasfile
     regions = g_create(prasfile, "regions")
     string_table!(regions, "_core", regiondata[!, [:name]], stringlength)
     regions["load", "compress", compressionlevel] = round.(UInt32, load)
 
-    return
+    return n_regions
 
 end
