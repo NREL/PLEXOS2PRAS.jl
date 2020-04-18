@@ -6,16 +6,12 @@ PLEXOS model specifications can be very complicated, so unfortunately the
 process for mapping them to PRAS inputs can be a bit involved as well!
 The following workflow aims to minimize the effort required:
 
-__Step 0: Prepare your environment__
+__Step 0: Installation__
 
 Follow the PRAS
 [installation instructions](https://nrel.github.io/PRAS/installation)
 to ensure your environment is ready to run both the PLEXOS2PRAS import tools
-and PRAS itself.
-
-By default, PRAS doesn't reexport the PLEXOS2PRAS tools, so you'll need to
-explicitly add that package to your project (it should already be downloaded
-during the PRAS installation process, just not directly available for import):
+and PRAS itself. Next, install PLEXOS2PRAS:
 
 ```
 (v1.3) pkg> add PLEXOS2PRAS
@@ -29,8 +25,8 @@ it should already be available in this format.
 If you only have the XML database file, you'll need to export your database
 via the PLEXOS GUI (File -> Export). Note that recent versions of PLEXOS have
 a bug that renders the Excel exports invalid for larger systems, so you may
-need to load your XML file in an older version of the PLEXOS GUI for this to
-work!
+need to load your XML file in an older version of the PLEXOS GUI (7.2 or
+earlier) for this to work!
 
 __Step 2: Run the pre-PRAS worksheet modification utility__
 
@@ -69,8 +65,7 @@ unsatisfactory.
 __Step 5: Run H5PLEXOS and the solution processor__
 
 Once you have a PLEXOS zipfile containing results for the Model run you want
-to represent in PRAS, run
-[`H5PLEXOS.process`](https://github.com/NREL/H5PLEXOS.jl)
+to represent in PRAS, use [H5PLEXOS.jl](https://github.com/NREL/H5PLEXOS.jl)
 to convert it to an HDF5 files.
 
 ```julia
@@ -89,7 +84,7 @@ using PLEXOS2PRAS
 process_solution("Model MyRun Solution.h5", "mysystem.pras")
 ```
 
-The function provides keyword arguments to exclude certain
+The function provides various keyword arguments to exclude certain
 generator categories, change how interregional limits are defined,
 etc.
 
