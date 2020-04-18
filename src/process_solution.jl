@@ -1,194 +1,104 @@
-function loadsystem(
-    inputpath_zip::String,
-    vg_categories::Vector{String}, exclude_categories::Vector{String},
-    useplexosinterfaces::Bool)
+function process_solution(
+    inputpath_h5::String,
+    outputpath_h5::String;
+    timestep::Period=Hour(1),
+    timezone::TimeZone=tz"UTC",
+    exclude_categories::Vector{String}=String[],
+    use_interfaces::Bool=false,
+    charge_capacities::Bool=false,
+    charge_efficiencies::Bool=true,
+    string_length::Int=64,
+    compression_level::Int=1)
 
-    inputpath_h5 = h5plexos(inputpath_zip)
-    rawdata = loadh5(inputpath_h5, vg_categories, exclude_categories,
-                     useplexosinterfaces)
+    xor(charge_capacities, charge_efficiencies) ||
+        error("Only one of charge_capacities, charge_efficiencies " *
+              "can be selected as true.")
 
-    n_periods = length(rawdata.timestamps)
+    h5open(inputpath_h5, "r") do plexosfile::HDF5File
+        h5open(outputpath_h5, "w") do prasfile::HDF5File
 
-    vgprofiles = aggregate_vg_regionally(rawdata)
+            process_metadata!(
+                prasfile, plexosfile, timestep, timezone)
 
-    interfaces, linespecs, linespecs_timelookup, lines_interfaceidx =
-        process_lines(rawdata, useplexosinterfaces)
+            n_regions = process_regions!(
+                prasfile, plexosfile,
+                string_length, compression_level)
 
-    genspecs, genspecs_timelookup, gens_regionidx =
-        process_dispatchable_generators(rawdata)
+            process_generators_storages!(
+                prasfile, plexosfile, timestep,
+                exclude_categories, charge_capacities,
+                string_length, compression_level)
 
-    storspecs, storspecs_timelookup, stors_regionidx =
-        process_storages(rawdata)
+            n_regions > 1 && process_lines_interfaces!(
+                prasfile, plexosfile, timestep,
+                use_interfaces, string_length, compression_level)
 
-    return ResourceAdequacy.SystemModel{n_periods,1,Hour,MW,MWh}(
-        rawdata.regionnames,
-        genspecs, gens_regionidx, storspecs, stors_regionidx,
-        interfaces, linespecs, lines_interfaceidx,
-        rawdata.timestamps, genspecs_timelookup,
-        storspecs_timelookup, linespecs_timelookup,
-        vgprofiles, permutedims(rawdata.demand))
+        end
+    end
+
+    return
 
 end
 
-function h5plexos(zippath::String)
-    h5path = replace(zippath, r"^(.*)\.zip$" => s"\1.h5")
-    h5process.process_solution(zippath, h5path).close()
-    return h5path
-end
+function process_metadata!(
+    prasfile::HDF5File,
+    plexosfile::HDF5File,
+    timestep::Period,
+    timezone::TimeZone)
 
-function process_lines(rawdata::RawSystemData{T,V},
-                       useplexosinterfaces::Bool) where {T,V}
-
-    if useplexosinterfaces
-        n_interfaces = length(rawdata.interfaceregions)
-        n_timesteps = length(rawdata.timestamps)
-        lineregions = rawdata.interfaceregions
-        linecapacities = rawdata.interfacecapacity
-        λ = zeros(n_timesteps, n_interfaces)
-        μ = ones(n_timesteps, n_interfaces)
+    version_message = "Only H5PLEXOS v0.6 files are supported"
+    if exists(attrs(plexosfile), "h5plexos")
+        version = read(attrs(plexosfile)["h5plexos"])
+        version_match = match(r"^v0.6.\d+$", version)
+        isnothing(version_match) && error(version_message * ", got " * version)
     else
-        lineregions = rawdata.lineregions
-        linecapacities = rawdata.linecapacity
-        λ, μ = plexosoutages_to_transitionprobs(rawdata.lineoutagerate, rawdata.linemttr)
+        error(version_message)
     end
 
-    interfaces = unique(lineregions)
-    lines_interfacestart = groupstartidxs(interfaces, lineregions)
-    linespecs, linespecs_lookup = deduplicatespecs(
-        ResourceAdequacy.LineSpec, linecapacities, λ, μ)
+    attributes = attrs(prasfile)
 
-    return interfaces, linespecs, linespecs_lookup, lines_interfacestart
+    attributes["pras_dataversion"] = "v0.5.0"
 
-end
+    # TODO: Are other values possible for these units?
+    attributes["power_unit"] = "MW"
+    attributes["energy_unit"] = "MWh"
 
-function aggregate_vg_regionally(rawdata::RawSystemData{T,V}) where {T, V}
+    dset = plexosfile["data/ST/interval/regions/Load"]
+    offset = read(attrs(dset)["period_offset"])
+    timestamp_range = offset .+ (1:size(dset, 2))
 
-    n_regions = length(rawdata.regionnames)
-    n_periods = size(rawdata.vgcapacity, 1)
-    vgprofiles = zeros(V, n_regions, n_periods)
+    timestamps_raw = read(plexosfile["metadata/times/interval"])[timestamp_range]
+    timestamps = ZonedDateTime.(
+        DateTime.(timestamps_raw, dateformat"yyyy-mm-ddTHH:MM:SS"), timezone)
 
-    for (i, r) in enumerate(rawdata.vgregions)
-        vgprofiles[r, :] .+= rawdata.vgcapacity[:, i]
-    end
+    all(timestamps[1:end-1] .+ timestep .== timestamps[2:end]) ||
+        error("PLEXOS result timestep durations did not " *
+              "all match provided timestep ($timestep)")
 
-    return vgprofiles
+    attributes["start_timestamp"] = string(first(timestamps))
+    attributes["timestep_count"] = length(timestamps)
+    attributes["timestep_length"] = timestep.value
+    attributes["timestep_unit"] = unitsymbol(typeof(timestep))
 
-end
-
-function process_dispatchable_generators(rawdata::RawSystemData{T,V}) where {T,V}
-
-    n_regions = length(rawdata.regionnames)
-
-    generators_regionstart = groupstartidxs(collect(1:n_regions), rawdata.dispregions)
-    λ, μ = plexosoutages_to_transitionprobs(rawdata.dispoutagerate, rawdata.dispmttr)
-    genspecs, genspecs_lookup = deduplicatespecs(
-        ResourceAdequacy.DispatchableGeneratorSpec, rawdata.dispcapacity, λ, μ)
-
-    return genspecs, genspecs_lookup, generators_regionstart
+    return
 
 end
 
-function process_storages(rawdata::RawSystemData{T,V}) where {T,V}
+function process_regions!(
+    prasfile::HDF5File, plexosfile::HDF5File,
+    stringlength::Int, compressionlevel::Int)
 
-    n_periods = length(rawdata.timestamps)
-    n_regions = length(rawdata.regionnames)
-    n_storages = length(rawdata.storregions)
+    # Load required data from plexosfile
+    regiondata = readcompound(plexosfile["/metadata/objects/regions"])
+    load = readsingleband(plexosfile["/data/ST/interval/regions/Load"])
 
-    stors_regionstart = groupstartidxs(collect(1:n_regions), rawdata.storregions)
-    λ, μ = plexosoutages_to_transitionprobs(rawdata.storoutagerate, rawdata.stormttr)
+    n_regions = size(regiondata, 1)
 
-    storspecs, storspecs_lookup = deduplicatespecs(
-        ResourceAdequacy.StorageDeviceSpec,
-        rawdata.storcapacity, rawdata.storenergy,
-        ones(n_periods, n_storages), λ, μ)
+    # Save data to prasfile
+    regions = g_create(prasfile, "regions")
+    string_table!(regions, "_core", regiondata[!, [:name]], stringlength)
+    regions["load", "compress", compressionlevel] = round.(UInt32, load)
 
-    return storspecs, storspecs_lookup, stors_regionstart
-
-end
-
-function groupstartidxs(groups::Vector{T}, unitgroups::Vector{T}) where {T}
-
-    @assert issorted(groups)
-    @assert issorted(unitgroups)
-
-    n_groups = length(groups)
-    n_units = length(unitgroups)
-    groupstart_idxs = Vector{Int}(undef, n_groups)
-
-    group_idx = unit_idx = 0
-    remaining_units = n_units > 0
-    remaining_groups = n_groups > 0
-    group = nullgroup(T)
-    unitgroup = nullgroup(T)
-
-    while remaining_groups
-
-        while unitgroup == group && remaining_units
-            unit_idx += 1
-            unitgroup = unitgroups[unit_idx]
-            unit_idx == n_units && (remaining_units = false)
-        end
-
-        while !(unitgroup == group && remaining_units) && remaining_groups
-            group_idx += 1
-            group = groups[group_idx]
-            groupstart_idxs[group_idx] = group <= unitgroup ? unit_idx : n_units + 1
-            group_idx == n_groups && (remaining_groups = false)
-        end
-
-    end
-
-    return groupstart_idxs
-
-end
-
-nullgroup(::Type{Int}) = -1
-nullgroup(::Type{NTuple{N,T}}) where {N,T} = ntuple(_ -> nullgroup(T), N)
-
-function plexosoutages_to_transitionprobs(outagerate::Matrix{V}, mttr::Matrix{V}) where {V <: Real}
-
-    # TODO: Generalize to non-hourly intervals
-    μ = 1 ./ mttr
-    μ[mttr .== 0] .= one(V) # Interpret zero MTTR as μ = 1.
-
-    outagerate = outagerate ./ 100
-    λ = μ .* outagerate ./ (1 .- outagerate)
-    λ[outagerate .== 0] .= zero(V) # Interpret zero FOR as λ = 0.
-
-    return λ, μ
-
-end
-
-function deduplicatespecs(Spec::Type{<:ResourceAdequacy.AssetSpec},
-                          rawspecs::Matrix{V}...) where {V<:Real}
-
-    n_periods = size(rawspecs[1], 1)
-    n_assets = size(rawspecs[1], 2)
-
-    hashes = UInt[]
-    specs_lookup = Vector{Int}(undef, n_periods)
-    specs = Matrix{Spec{V}}(undef, n_assets, n_periods)
-    nuniques = 0
-
-    for t in 1:n_periods
-
-        specs_t = Spec.(
-            (view(rawspec, t, :) for rawspec in rawspecs)...)
-
-        specshash = hash(specs_t)
-        hashidx = findfirst(isequal(specshash), hashes)
-
-        if hashidx !== nothing
-            specs_lookup[t] = hashidx
-        else
-            push!(hashes, specshash)
-            nuniques += 1
-            specs[:, nuniques] = specs_t
-            specs_lookup[t] = nuniques
-        end
-
-    end
-
-    return specs[:, 1:nuniques], specs_lookup
+    return n_regions
 
 end

@@ -1,35 +1,22 @@
 module PLEXOS2PRAS
 
-using Base.Filesystem
-using Dates
-using PyCall
-using HDF5
-using DataFrames
-using ResourceAdequacy
-using JLD
+import Dates: @dateformat_str, DateTime, Hour, Period
+import DataFrames: AbstractDataFrame, by, DataFrame, rename!
+import TimeZones: TimeZone, @tz_str, ZonedDateTime
+import HDF5
+import HDF5: attrs, exists, g_create, h5open, HDF5File, HDF5Group, read
+import PRAS.PRASBase: unitsymbol, conversionfactor, readvector
+import XLSX
 
-const np = PyNULL()
-const h5py = PyNULL()
-const h5process = PyNULL()
-const processworkbook = PyNULL()
+export process_workbook, process_solution
 
-function __init__()
-    copy!(np, pyimport_conda("numpy", "numpy"))
-    copy!(h5py, pyimport_conda("h5py", "h5py"))
-    copy!(h5process, pyimport("h5plexos.process"))
-    pushfirst!(PyVector(pyimport("sys")."path"), @__DIR__)
-    copy!(processworkbook, pyimport("processworkbook"))
-end
+include("utils.jl")
 
-export process_workbook, process_solutions
-
-# Excel input processing
+include("PLEXOSWorkbook.jl")
 include("process_workbook.jl")
 
-# Zipfile output processing
-include("RawSystemData.jl")
-include("loadh5.jl")
+include("process_generators_storages.jl")
+include("process_lines_interfaces.jl")
 include("process_solution.jl")
-include("process_solutions.jl")
 
 end
