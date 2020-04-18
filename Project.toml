@@ -11,6 +11,9 @@ PRAS = "05348d26-1c52-11e9-35e3-9d51842d34b9"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
 XLSX = "fdbf4ff8-1666-58a4-91e7-1b58723a45e0"
 
+[compat]
+PRAS = "0.5"
+
 [extras]
 H5PLEXOS = "30e9bc9d-95c1-474a-9a40-60ab4bafb5d2"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
