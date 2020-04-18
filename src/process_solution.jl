@@ -6,13 +6,13 @@ function process_solution(
     exclude_categories::Vector{String}=String[],
     use_interfaces::Bool=false,
     charge_capacities::Bool=false,
-    carryover_efficiencies::Bool=true,
+    charge_efficiencies::Bool=true,
     string_length::Int=64,
     compression_level::Int=1)
 
-    xor(charge_capacities, carryover_efficiencies) ||
-        @error("Only one of charge_capacities, carryover_efficiencies " *
-               "can be selected as true.")
+    xor(charge_capacities, charge_efficiencies) ||
+        error("Only one of charge_capacities, charge_efficiencies " *
+              "can be selected as true.")
 
     h5open(inputpath_h5, "r") do plexosfile::HDF5File
         h5open(outputpath_h5, "w") do prasfile::HDF5File

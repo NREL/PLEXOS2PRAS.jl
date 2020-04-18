@@ -3,8 +3,8 @@ function process_workbook(
     suffix::String="PRAS",
     charge_capacities::Bool=false, charge_efficiencies::Bool=true)
 
-    xor(charge_capacities, charge_efficiencies) || @error(
-        "Exactly one of charge_capacities, charge_efficiencies must be true")
+    xor(charge_capacities, charge_efficiencies) ||
+        error("Only one of charge_capacities, charge_efficiencies can be selected as true")
     gen_z_property = charge_capacities ? "Pump Load" : "Pump Efficiency"
 
     disambiguator = "_" * suffix
