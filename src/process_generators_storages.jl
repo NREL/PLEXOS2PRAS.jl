@@ -51,14 +51,27 @@ function process_generators_storages!(
             readsingleband(plexosfile["/data/ST/interval/generators/y"])
 
         if charge_capacities # Generator.z is Pump Load
+
             raw_chargecapacity =
                 readsingleband(plexosfile["/data/ST/interval/generators/z"])
             # assume fully efficient charging
             raw_chargeefficiency = ones(Float64, size(raw_chargecapacity)...)
+
         else # Generator.z is Pump Efficiency
+
             raw_chargecapacity = raw_dischargecapacity # assume symmetric
             raw_chargeefficiency =
                 readsingleband(plexosfile["/data/ST/interval/generators/z"]) ./ 100
+
+            any(iszero, raw_chargeefficiency) &&
+                @error "Generator(s) with 0% charge efficiency detected. " *
+                       "This is often a sign that the system includes " *
+                       "discharge-only Generator-Storage pairings that are " *
+                       "not being represented correctly by PLEXOS2PRAS. " *
+                       "Consider running `process_workbook` and " *
+                       "`process_solution` with `charge_capacities=true` " *
+                       "and `charge_efficiencies=false` instead."
+
         end
 
         raw_inflows =

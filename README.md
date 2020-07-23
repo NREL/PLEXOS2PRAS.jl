@@ -44,6 +44,23 @@ importing to PRAS. Note that if need be, you can also apply these changes
 manually in the PLEXOS GUI, and skip steps 1-3 here. For details, consult the
 [worksheet modification reference](worksheet_modification.md).
 
+The function takes two optional keyword arguments:
+
+`charge_capacities`: Should `Generator` and `GeneratorStorage` charge
+capacities be read in from the PLEXOS `Pump Load` property? Defaults to
+`false`, in which case the resources will be assumed to have symmetric charge
+/ discharge capacities. If not using the default, be sure to provide the same
+option to the `process_solution` function later.
+
+`charge_efficiencies`: Should `Generator` and `GeneratorStorage` charge
+efficiencies be read in from the PLEXOS `Pump Efficiency` property? Defaults to
+`true`. If `false`, the resources will be assumed to have 100% charge
+efficiency. If not using the default, be sure to provide the same option
+to the `process_solution` function later.
+
+Unfortunately, due to limitations in PLEXOS passthrough variables, only one of
+these arguments can be true at a time.
+
 __Step 3: Import the modified system back into PLEXOS__
 
 Import the modified system (`yourworkbookname_PRAS.xlsx` from the above
@@ -84,9 +101,29 @@ using PLEXOS2PRAS
 process_solution("Model MyRun Solution.h5", "mysystem.pras")
 ```
 
-The function provides various keyword arguments to exclude certain
-generator categories, change how interregional limits are defined,
-etc.
+The function provides a number of optional keyword arguments, including:
+
+`charge_capacities`: Should be the same as the value provided to the
+`process_workbook` function.
+
+`charge_efficiencies`: Should be the same as the value provided to the
+`process_workbook` function.
+
+`timestep`: The length of a simulation timestep as a `Dates.TimePeriod`, e.g.
+`Hour(1)` or `Minute(5)`. Defaults to `Hour(1)`.
+
+`timezone`: The `TimeZones.TimeZone` associated with PRAS system timestamps.
+Defaults to `tz"UTC"`, although providing a more accurate value is
+recommended for clarity, especially if your system geography spans multiple
+time zones.
+
+`use_interfaces`: Should interregional power transfer limits in PRAS be defined
+based on PLEXOS interface limits instead of the sum of interregional line
+limits? Defaults to `false`.
+
+`exclude_categories`: A `Vector{String}` of PLEXOS generator category names
+that will be ignored/excluded when creating the PRAS model. Defaults to an
+empty list.
 
 __Step 7: Load into PRAS__
 
@@ -101,5 +138,5 @@ using PRAS
 system = SystemModel("mysystem.pras")
 
 # Assess the reliability of the system
-assess(Modern(samples=100_000), Minimal(), system)
+assess(SequentialMonteCarlo(samples=100_000), Minimal(), system)
 ```
