@@ -11,7 +11,7 @@ function process_generators_storages!(
     plexosreservoirs = readreservoirs(plexosfile)
 
     # plexosgens without reservoirs are PRAS generators
-    gens = join(plexosgens, plexosreservoirs, on=:generator, kind=:anti)
+    gens = antijoin(plexosgens, plexosreservoirs, on=:generator)
     generators_core = gens[!, [:generator, :generator_category, :region]]
     gen_idxs = gens.generator_idx
     rename!(generators_core, [:name, :category, :region])
@@ -227,9 +227,9 @@ function readgenerators(f::HDF5File, excludecategories::Vector{String})
         f["metadata/objects/generators"], [:generator, :generator_category])
     generators.generator_idx = 1:size(generators, 1)
 
-    generators = join(
+    generators = antijoin(
         generators, DataFrame(generator_category=excludecategories),
-        on=:generator_category, kind=:anti)
+        on=:generator_category)
 
     generator_regions = readcompound(
         f["metadata/relations/regions_generators"], [:region, :generator])
@@ -237,11 +237,12 @@ function readgenerators(f::HDF5File, excludecategories::Vector{String})
     # Ensure no duplicated generators across regions
     # (if so, just pick the first region occurence)
     if !allunique(generator_regions.generator)
-        generator_regions =
-            by(generator_regions, :generator, d -> (region=d[1, :region],))
+        generator_regions = combine(
+            d -> (region=d[1, :region],),
+            groupby(generator_regions, :generator))
     end
 
-    generators = join(generators, generator_regions, on=:generator, kind=:inner)
+    generators = innerjoin(generators, generator_regions, on=:generator)
 
     return generators
 
@@ -264,7 +265,7 @@ function readreservoirs(f::HDF5File)
     generator_reservoirs = readcompound(
         f[storagerel_path], [:generator, :reservoir])
 
-    reservoirs = join(reservoirs, generator_reservoirs, on=:reservoir, kind=:inner)
+    reservoirs = innerjoin(reservoirs, generator_reservoirs, on=:reservoir)
 
     return reservoirs
 
@@ -275,10 +276,9 @@ function consolidatestors(gens::DataFrame, reservoirs::DataFrame)
     # gens cols: generator, generator_idx, generator_category, region
     # reservoirs cols: reservoir, reservoir_idx, reservoir_category, generator
 
-    gen_reservoirs = join(gens[!, [:generator, :generator_idx]],
+    gen_reservoirs = innerjoin(gens[!, [:generator, :generator_idx]],
                           reservoirs[!, [:generator, :reservoir_idx]],
-                          on=:generator, kind=:inner
-                         )[!, [:generator_idx, :reservoir_idx]]
+                          on=:generator)[!, [:generator_idx, :reservoir_idx]]
 
     gen_reservoirs[!, :storage_idx] .= 0
     npairs = size(gen_reservoirs, 1)
@@ -331,12 +331,12 @@ function consolidatestors(gens::DataFrame, reservoirs::DataFrame)
 
     end
 
-    storages = join(gens, gen_reservoirs, on=:generator_idx, kind=:inner)
-    storages = join(storages,
+    storages = innerjoin(gens, gen_reservoirs, on=:generator_idx)
+    storages = innerjoin(storages,
                     reservoirs[!, [:reservoir_idx, :reservoir, :reservoir_category]],
-                    on=:reservoir_idx, kind=:inner)
+                    on=:reservoir_idx)
 
-    storages = by(storages, :storage_idx) do d::AbstractDataFrame
+    storages = combine(groupby(storages, :storage_idx)) do d::AbstractDataFrame
 
         generators = unique(d[!, :generator])
         reservoirs = unique(d[!, :reservoir])

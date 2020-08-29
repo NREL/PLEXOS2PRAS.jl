@@ -1,7 +1,8 @@
 module PLEXOS2PRAS
 
 import Dates: @dateformat_str, DateTime, Hour, Period
-import DataFrames: AbstractDataFrame, by, DataFrame, rename!
+import DataFrames: AbstractDataFrame, DataFrame,
+                   groupby, combine, rename!, antijoin, innerjoin
 import TimeZones: TimeZone, @tz_str, ZonedDateTime
 import HDF5
 import HDF5: attrs, exists, g_create, h5open, HDF5File, HDF5Group, read

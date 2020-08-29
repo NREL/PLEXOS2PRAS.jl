@@ -36,8 +36,8 @@ function remove_properties!(
 
     exclusions = DataFrame(collection=collection, property=props)
 
-    wb.properties = join(
-        wb.properties, exclusions, on=[:collection, :property], kind=:anti)
+    wb.properties = antijoin(
+        wb.properties, exclusions, on=[:collection, :property])
 
     return
 
@@ -117,8 +117,8 @@ function remove_attributes!(
 
     exclusions = DataFrame(class=class, attribute=attrs)
 
-    wb.attributes = join(
-        wb.attributes, exclusions, on=[:class, :attribute], kind=:anti)
+    wb.attributes = antijoin(
+        wb.attributes, exclusions, on=[:class, :attribute])
 
     return
 

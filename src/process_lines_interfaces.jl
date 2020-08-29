@@ -92,8 +92,8 @@ function readlines(f::HDF5File)
         f["/metadata/relations/region_importinglines"],
         [:region_to, :line])
 
-    lines = join(lines, region_froms, on=:line, kind=:inner)
-    lines = join(lines, region_tos, on=:line, kind=:inner)
+    lines = innerjoin(lines, region_froms, on=:line)
+    lines = innerjoin(lines, region_tos, on=:line)
 
     return lines
 
@@ -110,16 +110,17 @@ function readinterfaces(f::HDF5File, line_regions::DataFrame)
     interfaces.interface_idx = 1:size(interfaces, 1)
 
     interface_lines = readcompound(
-        f["/metadata/relations/interface_lines"],
+        f["/metadata/relations/interfaces_lines"],
         [:interface, :line])
 
-    interface_lines = join(interfaces, interface_lines, on=:interface, kind=:inner)
-    interface_regions = join(interface_lines, line_regions, on=:line, kind=:inner)
+    interface_lines = innerjoin(interfaces, interface_lines, on=:interface)
+    interface_regions = innerjoin(interface_lines, line_regions, on=:line)
 
     # TODO: Need better checks that the from->to definition aligns with
     #       intended directional flow limits
     interfaces =
-        by(interface_regions, [:interface, :interface_category, :interface_idx]
+        combine(groupby(
+            interface_regions, [:interface, :interface_category, :interface_idx])
           ) do d::AbstractDataFrame
 
         from_to = minmax(d[1, :region_from], d[1, :region_to])

@@ -13,13 +13,19 @@
 
     @testset "Post-PLEXOS" begin
 
-        zipfile = testpath * "Model DAY_AHEAD_PRAS Solution.zip"
-        h5file = testpath * "Model DAY_AHEAD_PRAS Solution.h5"
-        prasfile = testpath * "rts.pras"
+        zipfile = testpath * "Model DAY_AHEAD_interfaces_PRAS Solution.zip"
+        h5file = testpath * "Model DAY_AHEAD_interfaces_PRAS Solution.h5"
+        prasfile_lines = testpath * "rts_lines.pras"
+        prasfile_interfaces = testpath * "rts_interfaces.pras"
 
         process(zipfile, h5file) # zip -> hdf5
-        process_solution(h5file, prasfile, # hdf5 -> pras
+
+        process_solution(h5file, prasfile_lines, # hdf5 -> pras
             exclude_categories=["Sync Cond"],
+            charge_capacities=true, charge_efficiencies=false)
+
+        process_solution(h5file, prasfile_interfaces, # hdf5 -> pras
+            exclude_categories=["Sync Cond"], use_interfaces=true,
             charge_capacities=true, charge_efficiencies=false)
 
         # Note that the "correct" battery charge efficiency should actually be
@@ -29,7 +35,7 @@
         # modelling the CSP plant's inability to charge from the grid is more
         # important than correctly representing battery charging losses.
 
-        sys = SystemModel(prasfile)
+        sys = SystemModel(prasfile_lines)
 
         @testset "Regions" begin
 
@@ -131,6 +137,30 @@
             @test lines.categories[l] == "Interregion_DC"
             @test all(isequal(100), lines.forward_capacity[l,:])
             @test all(isequal(100), lines.backward_capacity[l,:])
+
+        end
+
+        sys2 = SystemModel(prasfile_interfaces)
+
+        @testset "(PLEXOS) Interface-Defined Limits" begin
+
+            interfaces = sys2.interfaces
+            @test length(interfaces) == 3
+
+            lines = sys2.lines
+            @test length(lines) == 3
+
+            l = findfirst(isequal("A-B"), lines.names)
+            @test all(isequal(123), lines.forward_capacity[l,:])
+            @test all(isequal(123), lines.backward_capacity[l,:])
+
+            l = findfirst(isequal("A-C"), lines.names)
+            @test all(isequal(234), lines.forward_capacity[l,:])
+            @test all(isequal(234), lines.backward_capacity[l,:])
+
+            l = findfirst(isequal("B-C"), lines.names)
+            @test all(isequal(345), lines.forward_capacity[l,:])
+            @test all(isequal(345), lines.backward_capacity[l,:])
 
         end
 

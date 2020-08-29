@@ -57,9 +57,9 @@ function process_workbook(
 
     # Remove memberships to other phases (LT, PASA, MT)
 
-    workbook.memberships = join(
+    workbook.memberships = antijoin(
         workbook.memberships, DataFrame(child_class=["LT Plan", "PASA", "MT Schedule"]),
-        on=:child_class, kind=:anti)
+        on=:child_class)
 
     # Define new PRAS-specific Report object and associate with all models
 
