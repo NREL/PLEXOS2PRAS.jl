@@ -130,11 +130,11 @@ function readinterfaces(f::HDF5File, line_regions::DataFrame)
                 name = r.interface
                 @warn("Interface $name is not strictly biregional and " *
                       "will be ignored")
-                return nothing
+                return DataFrame()
             end
         end
 
-        return (region_from=from_to[1], region_to=from_to[2])
+        return DataFrame(region_from=from_to[1], region_to=from_to[2])
 
     end
 
