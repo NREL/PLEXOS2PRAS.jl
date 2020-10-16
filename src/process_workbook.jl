@@ -1,11 +1,43 @@
 function process_workbook(
     infile::String, outfile::Union{String,Nothing}=nothing;
     suffix::String="PRAS",
-    charge_capacities::Bool=false, charge_efficiencies::Bool=true)
+    charge_capacities::Bool=false, charge_efficiencies::Bool=true,
+    pump_capacities::Bool=false, pump_efficiencies::Bool=true,
+    battery_availabilities::Bool=false, battery_efficiencies::Bool=true)
 
-    xor(charge_capacities, charge_efficiencies) ||
-        error("Only one of charge_capacities, charge_efficiencies can be selected as true")
-    gen_z_property = charge_capacities ? "Pump Load" : "Pump Efficiency"
+
+    # Set pump options based on old charge options, if needed.
+    # Can be removed along with charge options in PLEXOS2PRAS 0.6
+
+    if charge_capacities
+        @warn("The charge_capacities option is deprecated, " *
+              "use pump_capacities instead")
+        pump_capacities = true
+    end
+
+    if !charge_efficiencies
+        @warn("The charge_efficiencies option is deprecated, " *
+              "use pump_efficiencies instead")
+        pump_efficiencies = false
+    end
+
+    # Check mutually-exclusive options are respected
+
+    xor(pump_capacities, pump_efficiencies) ||
+        error("Only one of pump_capacities, pump_efficiencies " *
+              "can be selected as true")
+
+    gen_z_property = pump_capacities ? "Pump Load" : "Pump Efficiency"
+
+    xor(battery_availabilities, battery_efficiencies) ||
+        error("Only one of battery_availabilities, battery_efficiencies " *
+              "can be selected as true")
+
+    batt_x_property = battery_availabilities ?
+        "Forced Outage Rate" : "Charge Efficiency"
+
+    batt_y_property = battery_availabilities ?
+        "Mean Time to Repair" : "Discharge Efficiency"
 
     disambiguator = "_" * suffix
 
@@ -15,25 +47,40 @@ function process_workbook(
 
     remove_properties!(workbook, "Generators", ["x", "y", "z", "Maintenance Rate"])
     remove_properties!(workbook, "Storages", ["x"])
+    remove_properties!(workbook, "Batteries", ["x", "y", "z", "Maintenance Rate"])
     remove_properties!(workbook, "Lines", ["x", "y", "Maintenance Rate"])
 
     # Convert targeted property values to new property names
 
     convert_properties!(workbook, "Generators",
                         ["Forced Outage Rate" => "x",
-                         "Mean Time to Repair" => "y",
-                         gen_z_property => "z"])
+                         "Mean Time to Repair" => "y"])
+
+    copy_properties!(workbook, "Generators",
+                     [gen_z_property => "z"])
+
+    convert_properties!(workbook, "Batteries",
+                        [batt_x_property => "x",
+                         batt_y_property => "y"])
+
+    copy_properties!(workbook, "Batteries",
+                     ["Capacity" => "z"])
 
     convert_properties!(workbook, "Lines",
                         ["Forced Outage Rate" => "x",
                          "Mean Time to Repair" => "y"])
 
-    convert_properties!(workbook, "Storages",
+    copy_properties!(workbook, "Storages",
                         ["Loss Rate" => "x"])
 
     # Reset targeted properties to necessary values
 
     blanket_properties!(workbook, "Generator", "Generators",
+                        ["Forced Outage Rate" => 0,
+                         "Maintenance Rate" => 0,
+                         "Mean Time to Repair" => 0])
+
+    blanket_properties!(workbook, "Battery", "Batteries",
                         ["Forced Outage Rate" => 0,
                          "Maintenance Rate" => 0,
                          "Mean Time to Repair" => 0])
@@ -84,6 +131,10 @@ function process_workbook(
     report_properties!(
         workbook, disambiguator, "Storage", "Storages",
         ["Min Volume", "Max Volume", "Natural Inflow", "x"])
+
+    report_properties!(
+        workbook, disambiguator, "Battery", "Batteries",
+        ["Installed Capacity", "x", "y", "z"])
 
     workbook.memberships[
         workbook.memberships.child_class .== "Report",
