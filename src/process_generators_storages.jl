@@ -4,11 +4,13 @@
 
 function process_generators_storages!(
     prasfile::HDF5File, plexosfile::HDF5File, timestep::Period,
-    excludecategories::Vector{String}, charge_capacities::Bool,
+    excludecategories::Vector{String},
+    pump_capacities::Bool, battery_availabilities::Bool,
     stringlength::Int, compressionlevel::Int)
 
     plexosgens = readgenerators(plexosfile, excludecategories)
     plexosreservoirs = readreservoirs(plexosfile)
+    plexosbatteries = readbatteries(plexosfile)
 
     # plexosgens without reservoirs are PRAS generators
     gens = antijoin(plexosgens, plexosreservoirs, on=:generator)
@@ -38,7 +40,8 @@ function process_generators_storages!(
     storages_core = DataFrame(name=String[], category=String[], region=String[])
     generatorstorages_core = deepcopy(storages_core)
 
-    n_stors_genstors = size(stors_genstors, 1)
+    n_batts = nrow(plexosbatteries)
+    n_stors_genstors = nrow(stors_genstors)
     n_periods = read(attrs(prasfile)["timestep_count"])
 
     if n_stors_genstors > 0 # Load storage and genstorage data
@@ -50,7 +53,7 @@ function process_generators_storages!(
         raw_mttrs =
             readsingleband(plexosfile["/data/ST/interval/generators/y"])
 
-        if charge_capacities # Generator.z is Pump Load
+        if pump_capacities # Generator.z is Pump Load
 
             raw_chargecapacity =
                 readsingleband(plexosfile["/data/ST/interval/generators/z"])
@@ -64,13 +67,13 @@ function process_generators_storages!(
                 readsingleband(plexosfile["/data/ST/interval/generators/z"]) ./ 100
 
             any(iszero, raw_chargeefficiency) &&
-                @error "Generator(s) with 0% charge efficiency detected. " *
+                @error "Generator(s) with 0% pump efficiency detected. " *
                        "This is often a sign that the system includes " *
                        "discharge-only Generator-Storage pairings that are " *
                        "not being represented correctly by PLEXOS2PRAS. " *
                        "Consider running `process_workbook` and " *
-                       "`process_solution` with `charge_capacities=true` " *
-                       "and `charge_efficiencies=false` instead."
+                       "`process_solution` with `pump_capacities=true` " *
+                       "and `pump_efficiencies=false` instead."
 
         end
 
@@ -152,14 +155,86 @@ function process_generators_storages!(
 
         λ, μ = plexosoutages_to_transitionprobs(fors, mttrs, timestep)
 
+        # Load storages from PLEXOS batteries
+
+        if n_batts > 0
+
+            for row in eachrow(plexosbatteries)
+                push!(storages_core,
+                      (name=row.battery, category=row.battery_category,
+                       region=row.region))
+            end
+
+            battery_dischargecapacity = round.(UInt32, readsingleband(
+                plexosfile["/data/ST/interval/batteries/Installed Capacity"]))
+
+            battery_chargecapacity = battery_dischargecapacity
+
+            battery_energycapacity = round.(UInt32, readsingleband(
+                plexosfile["data/ST/interval/batteries/z"]))
+
+            battery_carryoverefficiency = ones(Float64, n_batts, n_periods)
+
+            if battery_availabilities
+
+                battery_chargeefficiency = ones(Float64, n_batts, n_periods)
+                battery_dischargeefficiency = ones(Float64, n_batts, n_periods)
+
+                battery_fors = readsingleband(
+                    plexosfile["data/ST/interval/batteries/x"])
+                battery_mttrs = readsingleband(
+                    plexosfile["data/ST/interval/batteries/y"])
+
+            else
+
+                battery_chargeefficiency = readsingleband(
+                    plexosfile["/data/ST/interval/batteries/x"]) ./ 100
+                battery_dischargeefficiency = readsingleband(
+                    plexosfile["/data/ST/interval/batteries/y"]) ./ 100
+
+                battery_fors = zeros(Float64, n_batts, n_periods)
+                battery_mttrs = ones(Float64, n_batts, n_periods)
+
+            end
+
+            battery_λ, battery_μ =
+                plexosoutages_to_transitionprobs(battery_fors, battery_mttrs, timestep)
+
+        end
+
         # write results to prasfile
 
-        if stor_idx > 0
-
-            stor_idxs = n_stors_genstors:-1:(genstor_idx+1)
-
+        if stor_idx > 0 || n_batts > 0
             storages = g_create(prasfile, "storages")
             string_table!(storages, "_core", storages_core, stringlength)
+        end
+
+        if stor_idx > 0
+            stor_idxs = n_stors_genstors:-1:(genstor_idx+1)
+        end
+
+        if stor_idx > 0 && n_batts > 0
+
+            storages["chargecapacity", "compress", compressionlevel] =
+                vcat(chargecapacity[stor_idxs, :], battery_chargecapacity)
+            storages["dischargecapacity", "compress", compressionlevel] =
+                vcat(dischargecapacity[stor_idxs, :], battery_dischargecapacity)
+            storages["energycapacity", "compress", compressionlevel] =
+                vcat(energycapacity[stor_idxs, :], battery_energycapacity)
+
+            storages["chargeefficiency", "compress", compressionlevel] =
+                vcat(chargeefficiency[stor_idxs, :], battery_chargeefficiency)
+            storages["dischargeefficiency", "compress", compressionlevel] =
+                vcat(dischargeefficiency[stor_idxs, :], battery_dischargeefficiency)
+            storages["carryoverefficiency", "compress", compressionlevel] =
+                vcat(carryoverefficiency[stor_idxs, :], battery_carryoverefficiency)
+
+            storages["failureprobability", "compress", compressionlevel] =
+                vcat(λ[stor_idxs, :], battery_λ)
+            storages["repairprobability", "compress", compressionlevel] =
+                vcat(μ[stor_idxs, :], battery_μ)
+
+        elseif stor_idx > 0
 
             storages["chargecapacity", "compress", compressionlevel] =
                 chargecapacity[stor_idxs, :]
@@ -179,6 +254,30 @@ function process_generators_storages!(
                 λ[stor_idxs, :]
             storages["repairprobability", "compress", compressionlevel] =
                 μ[stor_idxs, :]
+
+        elseif n_batts > 0
+
+            storages = g_create(prasfile, "storages")
+            string_table!(storages, "_core", storages_core, stringlength)
+
+            storages["chargecapacity", "compress", compressionlevel] =
+                battery_chargecapacity
+            storages["dischargecapacity", "compress", compressionlevel] =
+                battery_dischargecapacity
+            storages["energycapacity", "compress", compressionlevel] =
+                battery_energycapacity
+
+            storages["chargeefficiency", "compress", compressionlevel] =
+                battery_chargeefficiency
+            storages["dischargeefficiency", "compress", compressionlevel] =
+                battery_dischargeefficiency
+            storages["carryoverefficiency", "compress", compressionlevel] =
+                battery_carryoverefficiency
+
+            storages["failureprobability", "compress", compressionlevel] =
+                battery_λ
+            storages["repairprobability", "compress", compressionlevel] =
+                battery_μ
 
         end
 
@@ -225,7 +324,7 @@ function readgenerators(f::HDF5File, excludecategories::Vector{String})
 
     generators = readcompound(
         f["metadata/objects/generators"], [:generator, :generator_category])
-    generators.generator_idx = 1:size(generators, 1)
+    generators.generator_idx = 1:nrow(generators)
 
     generators = antijoin(
         generators, DataFrame(generator_category=excludecategories),
@@ -260,7 +359,7 @@ function readreservoirs(f::HDF5File)
 
     reservoirs = readcompound(
         f[storage_path], [:reservoir, :reservoir_category])
-    reservoirs.reservoir_idx = 1:size(reservoirs, 1)
+    reservoirs.reservoir_idx = 1:nrow(reservoirs)
 
     generator_reservoirs = readcompound(
         f[storagerel_path], [:generator, :reservoir])
@@ -268,6 +367,34 @@ function readreservoirs(f::HDF5File)
     reservoirs = innerjoin(reservoirs, generator_reservoirs, on=:reservoir)
 
     return reservoirs
+
+end
+
+function readbatteries(f::HDF5File)
+
+    battery_path = "metadata/objects/batteries"
+
+    if !exists(f, battery_path)
+        return DataFrame(battery=String[], battery_category=String[],
+                         region=String[])
+    end
+
+    batteries = readcompound(
+        f[battery_path], [:battery, :battery_category])
+    battery_regions = readcompound(
+        f["metadata/relations/regions_batteries"], [:region, :battery])
+
+    # Ensure no duplicated batteries across regions
+    # (if so, just pick the first region occurence)
+    if !allunique(battery_regions.battery)
+        battery_regions = combine(
+            d -> (region=d[1, :region],),
+            groupby(battery_regions, :battery))
+    end
+
+    batteries = innerjoin(batteries, battery_regions, on=:battery)
+
+    return batteries
 
 end
 
@@ -281,7 +408,7 @@ function consolidatestors(gens::DataFrame, reservoirs::DataFrame)
                           on=:generator)[!, [:generator_idx, :reservoir_idx]]
 
     gen_reservoirs[!, :storage_idx] .= 0
-    npairs = size(gen_reservoirs, 1)
+    npairs = nrow(gen_reservoirs)
 
     stor_idx = 0
     gs = BitSet()

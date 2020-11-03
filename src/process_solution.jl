@@ -5,14 +5,36 @@ function process_solution(
     timezone::TimeZone=tz"UTC",
     exclude_categories::Vector{String}=String[],
     use_interfaces::Bool=false,
-    charge_capacities::Bool=false,
-    charge_efficiencies::Bool=true,
+    charge_capacities::Bool=false, charge_efficiencies::Bool=true,
+    pump_capacities::Bool=false, pump_efficiencies::Bool=true,
+    battery_availabilities::Bool=false, battery_efficiencies::Bool=true,
     string_length::Int=64,
     compression_level::Int=1)
 
-    xor(charge_capacities, charge_efficiencies) ||
-        error("Only one of charge_capacities, charge_efficiencies " *
-              "can be selected as true.")
+    # Set pump options based on old charge options, if needed.
+    # Can be removed along with charge options in PLEXOS2PRAS 0.6
+
+    if charge_capacities
+        @warn("The charge_capacities option is deprecated, " *
+              "use pump_capacities instead")
+        pump_capacities = true
+    end
+
+    if !charge_efficiencies
+        @warn("The charge_efficiencies option is deprecated, " *
+              "use pump_efficiencies instead")
+        pump_efficiencies = false
+    end
+
+    # Check mutually-exclusive options are respected
+
+    xor(pump_capacities, pump_efficiencies) ||
+        error("Exactly one of pump_capacities, pump_efficiencies " *
+              "must be selected as true")
+
+    xor(battery_availabilities, battery_efficiencies) ||
+        error("Exactly one of battery_availabilities, battery_efficiencies " *
+              "must be selected as true")
 
     h5open(inputpath_h5, "r") do plexosfile::HDF5File
         h5open(outputpath_h5, "w") do prasfile::HDF5File
@@ -26,7 +48,7 @@ function process_solution(
 
             process_generators_storages!(
                 prasfile, plexosfile, timestep,
-                exclude_categories, charge_capacities,
+                exclude_categories, pump_capacities, battery_availabilities,
                 string_length, compression_level)
 
             n_regions > 1 && process_lines_interfaces!(

@@ -59,6 +59,27 @@ function convert_properties!(
 
 end
 
+function copy_properties!(
+    wb::PLEXOSWorkbook, collection::String, props_raw::Vector{Pair{String,String}})
+
+    props = Dict(props_raw)
+    target_props = keys(props)
+    newrows = DataFrame()
+
+    for row in eachrow(wb.properties)
+        if (row.collection == collection) && (row.property in target_props)
+            newrow = Dict(pairs(NamedTuple(row)))
+            newrow[:property] = props[row.property]
+            push!(newrows, (; newrow...))
+        end
+    end
+
+    append!(wb.properties, newrows)
+
+    return
+
+end
+
 function blanket_properties!(
     wb::PLEXOSWorkbook, class::String, collection::String,
     propvals::Vector{Pair{String,T}}) where T

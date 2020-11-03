@@ -44,22 +44,49 @@ importing to PRAS. Note that if need be, you can also apply these changes
 manually in the PLEXOS GUI, and skip steps 1-3 here. For details, consult the
 [worksheet modification reference](worksheet_modification.md).
 
-The function takes two optional keyword arguments:
+The function takes two sets of optional keyword arguments. Unfortunately, due
+to limitations with PLEXOS passthrough variables, only one argument from each
+set can be true at a time.
 
-`charge_capacities`: Should `Generator` and `GeneratorStorage` charge
+Pumped hydro options:
+
+`pump_capacities`: For `Storage` and `GeneratorStorage` resources loaded from
+PLEXOS pumped storage resources, should charge
 capacities be read in from the PLEXOS `Pump Load` property? Defaults to
 `false`, in which case the resources will be assumed to have symmetric charge
 / discharge capacities. If not using the default, be sure to provide the same
 option to the `process_solution` function later.
 
-`charge_efficiencies`: Should `Generator` and `GeneratorStorage` charge
+`pump_efficiencies`: For `Storage` and `GeneratorStorage` resources loaded
+from PLEXOS pumped storage resources, should charge
 efficiencies be read in from the PLEXOS `Pump Efficiency` property? Defaults to
 `true`. If `false`, the resources will be assumed to have 100% charge
 efficiency. If not using the default, be sure to provide the same option
 to the `process_solution` function later.
 
-Unfortunately, due to limitations in PLEXOS passthrough variables, only one of
-these arguments can be true at a time.
+Battery options:
+
+`battery_availabilities`: For `Storage` resources loaded from PLEXOS battery
+objects, should availability data be read in from the PLEXOS
+`Forced Outage Rate` and `Mean Time to Repair` properties? Defaults to `false`,
+in which case the resource will be assumed to have perfect availability (0%
+forced outage rate). If not using the default, be sure to provide the same
+option to the `process_solution` function later.
+
+`battery_efficiencies`: For `Storage` resources loaded from PLEXOS battery
+objects, should efficiencies be read in from the PLEXOS `Charge Efficiency` and
+`Discharge Efficiency` properties? Defaults to `true`. If `false`, the
+resources are assumed to be 100% efficient. If not using the default, be sure
+to provide the same option to the `process_solution` function later.
+
+_Note that PLEXOS battery objects are particularly constrained by PLEXOS
+passthrough variables. There are six PLEXOS properties requiring passthrough
+(`Capacity`, `Max Load`, `Charge Efficiency`, `Discharge Efficiency`,
+`Forced Outage Rate`, `Mean Time To Repair`) but only three passthrough
+variables available (`x`, `y`, `z`). Because of these limitations, PRAS
+`Storage` resources imported from PLEXOS battery objects will always assume
+symmetric charge and discharge capabilities (i.e. the PLEXOS `Max Load`
+property will be ignored)._
 
 __Step 3: Import the modified system back into PLEXOS__
 
@@ -101,13 +128,18 @@ using PLEXOS2PRAS
 process_solution("Model MyRun Solution.h5", "mysystem.pras")
 ```
 
-The function provides a number of optional keyword arguments, including:
+The function provides a number of optional keyword arguments, including two
+sets of mutually-exclusive options:
 
-`charge_capacities`: Should be the same as the value provided to the
-`process_workbook` function.
+`pump_capacities` vs `pump_efficiencies`: Boolean values that determine how
+reported PLEXOS pumped storage properties should map to PRAS Storage and
+GeneratorStorage properties. The provided values should match the options set
+in the earlier `process_workbook` function call.
 
-`charge_efficiencies`: Should be the same as the value provided to the
-`process_workbook` function.
+`battery_availabilities` vs `battery_efficiencies`: Boolean values that
+determine how reported PLEXOS Battery properties should map to PRAS Storage
+properties. The provided values should match the options set in the earlier
+`process_workbook` function call.
 
 `timestep`: The length of a simulation timestep as a `Dates.TimePeriod`, e.g.
 `Hour(1)` or `Minute(5)`. Defaults to `Hour(1)`.
