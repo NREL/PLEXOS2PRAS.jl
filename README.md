@@ -128,13 +128,18 @@ using PLEXOS2PRAS
 process_solution("Model MyRun Solution.h5", "mysystem.pras")
 ```
 
-The function provides a number of optional keyword arguments, including:
+The function provides a number of optional keyword arguments, including two
+sets of mutually-exclusive options:
 
-`charge_capacities`: Should be the same as the value provided to the
-`process_workbook` function.
+`pump_capacities` vs `pump_efficiencies`: Boolean values that determine how
+reported PLEXOS pumped storage properties should map to PRAS Storage and
+GeneratorStorage properties. The provided values should match the options set
+in the earlier `process_workbook` function call.
 
-`charge_efficiencies`: Should be the same as the value provided to the
-`process_workbook` function.
+`battery_availabilities` vs `battery_efficiencies`: Boolean values that
+determine how reported PLEXOS Battery properties should map to PRAS Storage
+properties. The provided values should match the options set in the earlier
+`process_workbook` function call.
 
 `timestep`: The length of a simulation timestep as a `Dates.TimePeriod`, e.g.
 `Hour(1)` or `Minute(5)`. Defaults to `Hour(1)`.
