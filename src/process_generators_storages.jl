@@ -257,9 +257,6 @@ function process_generators_storages!(
 
         elseif n_batts > 0
 
-            storages = g_create(prasfile, "storages")
-            string_table!(storages, "_core", storages_core, stringlength)
-
             storages["chargecapacity", "compress", compressionlevel] =
                 battery_chargecapacity
             storages["dischargecapacity", "compress", compressionlevel] =
