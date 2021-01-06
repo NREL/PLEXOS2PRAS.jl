@@ -170,8 +170,10 @@ function process_generators_storages!(
 
             battery_chargecapacity = battery_dischargecapacity
 
-            battery_energycapacity = round.(UInt32, readsingleband(
-                plexosfile["data/ST/interval/batteries/z"]))
+            battery_energycapacity = round.(UInt32,
+                readsingleband(plexosfile["data/ST/interval/batteries/z"]) .*
+                readsingleband(plexosfile["data/ST/interval/batteries/Units"])
+            )
 
             battery_carryoverefficiency = ones(Float64, n_batts, n_periods)
 
