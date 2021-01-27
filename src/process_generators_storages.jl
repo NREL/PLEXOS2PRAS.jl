@@ -46,7 +46,7 @@ function process_generators_storages!(
 
     if n_stors_genstors > 0 # Load storage and genstorage data
 
-        raw_dischargecapacity =
+        raw_gridinjectioncapacity =
             readsingleband(plexosfile["/data/ST/interval/generators/Available Capacity"])
         raw_fors =
             readsingleband(plexosfile["/data/ST/interval/generators/x"])
@@ -55,14 +55,14 @@ function process_generators_storages!(
 
         if pump_capacities # Generator.z is Pump Load
 
-            raw_chargecapacity =
+            raw_gridwithdrawalcapacity =
                 readsingleband(plexosfile["/data/ST/interval/generators/z"])
             # assume fully efficient charging
-            raw_chargeefficiency = ones(Float64, size(raw_chargecapacity)...)
+            raw_chargeefficiency = ones(Float64, size(raw_gridwithdrawalcapacity)...)
 
         else # Generator.z is Pump Efficiency
 
-            raw_chargecapacity = raw_dischargecapacity # assume symmetric
+            raw_gridwithdrawalcapacity = raw_gridinjectioncapacity # assume symmetric
             raw_chargeefficiency =
                 readsingleband(plexosfile["/data/ST/interval/generators/z"]) ./ 100
 
@@ -91,8 +91,8 @@ function process_generators_storages!(
 
         inflow = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
 
-        chargecapacity = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
-        dischargecapacity = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
+        gridwithdrawalcapacity = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
+        gridinjectioncapacity = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
         energycapacity = Matrix{UInt32}(undef, n_stors_genstors, n_periods)
 
         chargeefficiency = Matrix{Float64}(undef, n_stors_genstors, n_periods)
@@ -133,10 +133,10 @@ function process_generators_storages!(
                        region=row.region))
             end
 
-            chargecapacity[idx, :] =
-                round.(UInt32, sum(raw_chargecapacity[gen_idxs, :], dims=1))
-            dischargecapacity[idx, :] =
-                round.(UInt32, sum(raw_dischargecapacity[gen_idxs, :], dims=1))
+            gridwithdrawalcapacity[idx, :] =
+                round.(UInt32, sum(raw_gridwithdrawalcapacity[gen_idxs, :], dims=1))
+            gridinjectioncapacity[idx, :] =
+                round.(UInt32, sum(raw_gridinjectioncapacity[gen_idxs, :], dims=1))
             energycapacity[idx, :] =
                 round.(UInt32, sum(raw_energycapacity[res_idxs, :], dims=1))
 
@@ -218,9 +218,9 @@ function process_generators_storages!(
         if stor_idx > 0 && n_batts > 0
 
             storages["chargecapacity", "compress", compressionlevel] =
-                vcat(chargecapacity[stor_idxs, :], battery_chargecapacity)
+                vcat(gridwithdrawalcapacity[stor_idxs, :], battery_chargecapacity)
             storages["dischargecapacity", "compress", compressionlevel] =
-                vcat(dischargecapacity[stor_idxs, :], battery_dischargecapacity)
+                vcat(gridinjectioncapacity[stor_idxs, :], battery_dischargecapacity)
             storages["energycapacity", "compress", compressionlevel] =
                 vcat(energycapacity[stor_idxs, :], battery_energycapacity)
 
@@ -239,9 +239,9 @@ function process_generators_storages!(
         elseif stor_idx > 0
 
             storages["chargecapacity", "compress", compressionlevel] =
-                chargecapacity[stor_idxs, :]
+                gridwithdrawalcapacity[stor_idxs, :]
             storages["dischargecapacity", "compress", compressionlevel] =
-                dischargecapacity[stor_idxs, :]
+                gridinjectioncapacity[stor_idxs, :]
             storages["energycapacity", "compress", compressionlevel] =
                 energycapacity[stor_idxs, :]
 
@@ -290,14 +290,14 @@ function process_generators_storages!(
             generatorstorages["inflow", "compress", compressionlevel] =
                 inflow[genstor_idxs, :]
             generatorstorages["gridwithdrawalcapacity", "compress", compressionlevel] =
-                chargecapacity[genstor_idxs, :]
+                gridwithdrawalcapacity[genstor_idxs, :]
             generatorstorages["gridinjectioncapacity", "compress", compressionlevel] =
-                dischargecapacity[genstor_idxs, :]
+                gridinjectioncapacity[genstor_idxs, :]
 
             generatorstorages["chargecapacity", "compress", compressionlevel] =
-                chargecapacity[genstor_idxs, :]
+                gridwithdrawalcapacity[genstor_idxs, :] .+ inflow[genstor_idxs, :]
             generatorstorages["dischargecapacity", "compress", compressionlevel] =
-                dischargecapacity[genstor_idxs, :]
+                gridinjectioncapacity[genstor_idxs, :]
             generatorstorages["energycapacity", "compress", compressionlevel] =
                 energycapacity[genstor_idxs, :]
 

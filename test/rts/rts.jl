@@ -100,7 +100,7 @@
             @test sys.generatorstorages.names == ["212_CSP_1"]
             @test sys.generatorstorages.categories== ["CSP"]
 
-            @test all(isequal(0), genstors.charge_capacity)
+            @test all(genstors.charge_capacity .== genstors.inflow)
             @test all(isequal(200), genstors.discharge_capacity)
             @test all(isequal(1200), genstors.energy_capacity)
             @test all(isequal(1.0), genstors.charge_efficiency)
