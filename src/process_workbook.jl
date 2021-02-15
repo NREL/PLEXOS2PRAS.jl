@@ -134,7 +134,7 @@ function process_workbook(
 
     report_properties!(
         workbook, disambiguator, "Battery", "Batteries",
-        ["Installed Capacity", "x", "y", "z"])
+        ["Units", "Installed Capacity", "x", "y", "z"])
 
     workbook.memberships[
         workbook.memberships.child_class .== "Report",

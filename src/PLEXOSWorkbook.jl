@@ -64,7 +64,7 @@ function copy_properties!(
 
     props = Dict(props_raw)
     target_props = keys(props)
-    newrows = DataFrame()
+    newrows = similar(wb.properties, 0)
 
     for row in eachrow(wb.properties)
         if (row.collection == collection) && (row.property in target_props)
