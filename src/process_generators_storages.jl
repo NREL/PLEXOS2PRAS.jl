@@ -464,6 +464,8 @@ function consolidatestors(gens::DataFrame, reservoirs::DataFrame)
 
     storages = combine(groupby(storages, :storage_idx)) do d::AbstractDataFrame
 
+        nrow(d) > 0 || return
+
         generators = unique(d[!, :generator])
         reservoirs = unique(d[!, :reservoir])
         regions = unique(d[!, :region])

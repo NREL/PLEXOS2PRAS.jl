@@ -23,21 +23,21 @@ function process_lines_interfaces!(
 
     if useplexosinterfaces
 
-        # TODO: How to respect intended reference direction?
-        forwardcapacity = .- readsingleband(
-            plexosfile["/data/ST/interval/interfaces/Import Limit"], idxs)
-        backwardcapacity = readsingleband(
+        forwardcapacity = readsingleband(
             plexosfile["/data/ST/interval/interfaces/Export Limit"], idxs)
+        backwardcapacity = .- readsingleband(
+            plexosfile["/data/ST/interval/interfaces/Import Limit"], idxs)
 
         λ = zeros(size(forwardcapacity)...)
         μ = ones(size(forwardcapacity)...)
 
     else
 
-        forwardcapacity = .- readsingleband(
-            plexosfile["/data/ST/interval/lines/Import Limit"], idxs)
-        backwardcapacity = readsingleband(
+        forwardcapacity = readsingleband(
             plexosfile["/data/ST/interval/lines/Export Limit"], idxs)
+
+        backwardcapacity = .- readsingleband(
+            plexosfile["/data/ST/interval/lines/Import Limit"], idxs)
 
         fors = readsingleband(plexosfile["/data/ST/interval/lines/x"], idxs)
         mttrs = readsingleband(plexosfile["/data/ST/interval/lines/y"], idxs)
@@ -116,25 +116,42 @@ function readinterfaces(f::HDF5File, line_regions::DataFrame)
     interface_lines = innerjoin(interfaces, interface_lines, on=:interface)
     interface_regions = innerjoin(interface_lines, line_regions, on=:line)
 
-    # TODO: Need better checks that the from->to definition aligns with
-    #       intended directional flow limits
     interfaces =
         combine(groupby(
             interface_regions, [:interface, :interface_category, :interface_idx])
           ) do d::AbstractDataFrame
 
-        from_to = minmax(d[1, :region_from], d[1, :region_to])
+        nrow(d) > 0 || return DataFrame()
+
+        iface_name = d[1, :interface]
+        iface_from_to = d[1, :region_from], d[1, :region_to]
+        line_warned = false
 
         for r in eachrow(d)
-            if minmax(r.region_from, r.region_to) != from_to
-                name = r.interface
-                @warn("Interface $name is not strictly biregional and " *
-                      "will be ignored")
+
+            line_from_to = (r.region_from, r.region_to)
+
+            if minmax(line_from_to...) != minmax(iface_from_to...)
+
+                @warn("Interface $(iface_name) is not strictly biregional " *
+                      "and will be ignored")
                 return DataFrame()
+
+            elseif line_from_to != iface_from_to
+
+                line_warned || @error("Interface $(iface_name) contains " *
+                      "lines with opposing reference directions. Interface " *
+                      "flow limits may not be applied as intended: you " *
+                      "should check this manually in the resulting PRAS " *
+                      "system.")
+                line_warned = true
+
             end
+
         end
 
-        return DataFrame(region_from=from_to[1], region_to=from_to[2])
+        return DataFrame(region_from=iface_from_to[1],
+                         region_to=iface_from_to[2])
 
     end
 
