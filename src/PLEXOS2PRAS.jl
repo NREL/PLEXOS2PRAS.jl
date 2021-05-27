@@ -5,7 +5,7 @@ import DataFrames: AbstractDataFrame, DataFrame,
                    groupby, combine, rename!, antijoin, innerjoin, nrow
 import TimeZones: TimeZone, @tz_str, ZonedDateTime
 import HDF5
-import HDF5: attrs, exists, g_create, h5open, HDF5File, HDF5Group, read
+import HDF5: attributes, create_group, create_dataset, h5open, read
 import PRAS.PRASBase: unitsymbol, conversionfactor, readvector
 import XLSX
 

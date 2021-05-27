@@ -1,5 +1,5 @@
 function process_lines_interfaces!(
-    prasfile::HDF5File, plexosfile::HDF5File, timestep::Period,
+    prasfile::HDF5.File, plexosfile::HDF5.File, timestep::Period,
     useplexosinterfaces::Bool, stringlength::Int, compressionlevel::Int)
 
     lineregions = readlines(plexosfile)
@@ -57,27 +57,27 @@ function process_lines_interfaces!(
 
     # Save data to prasfile
 
-    lines = g_create(prasfile, "lines")
+    lines = create_group(prasfile, "lines")
     string_table!(lines, "_core", lines_core, stringlength)
-    lines["forwardcapacity", "compress", compressionlevel] =
+    lines["forwardcapacity", compress=compressionlevel] =
         round.(UInt32, forwardcapacity)
-    lines["backwardcapacity", "compress", compressionlevel] =
+    lines["backwardcapacity", compress=compressionlevel] =
         round.(UInt32, backwardcapacity)
-    lines["failureprobability", "compress", compressionlevel] = λ
-    lines["repairprobability", "compress", compressionlevel] = μ
+    lines["failureprobability", compress=compressionlevel] = λ
+    lines["repairprobability", compress=compressionlevel] = μ
 
-    interfaces = g_create(prasfile, "interfaces")
+    interfaces = create_group(prasfile, "interfaces")
     string_table!(interfaces, "_core", interfaces_core, stringlength)
-    interfaces["forwardcapacity", "compress", compressionlevel] =
+    interfaces["forwardcapacity", compress=compressionlevel] =
         infinitecapacity
-    interfaces["backwardcapacity", "compress", compressionlevel] =
+    interfaces["backwardcapacity", compress=compressionlevel] =
         infinitecapacity
 
     return
 
 end
 
-function readlines(f::HDF5File)
+function readlines(f::HDF5.File)
 
     lines = readcompound(
         f["/metadata/objects/lines"],
@@ -102,7 +102,7 @@ end
 """
 Read in PLEXOS interfaces (to be treated as PRAS lines)
 """
-function readinterfaces(f::HDF5File, line_regions::DataFrame)
+function readinterfaces(f::HDF5.File, line_regions::DataFrame)
 
     interfaces = readcompound(
         f["/metadata/objects/interfaces"],

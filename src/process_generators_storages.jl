@@ -3,7 +3,7 @@
 # injection/withdrawal capabilities)
 
 function process_generators_storages!(
-    prasfile::HDF5File, plexosfile::HDF5File, timestep::Period,
+    prasfile::HDF5.File, plexosfile::HDF5.File, timestep::Period,
     excludecategories::Vector{String},
     pump_capacities::Bool, battery_availabilities::Bool,
     stringlength::Int, compressionlevel::Int)
@@ -28,11 +28,11 @@ function process_generators_storages!(
             plexosfile["/data/ST/interval/generators/y"], gen_idxs)
         λ, μ = plexosoutages_to_transitionprobs(gen_for, gen_mttr, timestep)
 
-        generators = g_create(prasfile, "generators")
+        generators = create_group(prasfile, "generators")
         string_table!(generators, "_core", generators_core, stringlength)
-        generators["capacity", "compress", compressionlevel] = round.(UInt32, gen_capacity)
-        generators["failureprobability", "compress", compressionlevel] = λ
-        generators["repairprobability", "compress", compressionlevel] = μ
+        generators["capacity", compress=compressionlevel] = round.(UInt32, gen_capacity)
+        generators["failureprobability", compress=compressionlevel] = λ
+        generators["repairprobability", compress=compressionlevel] = μ
 
     end
 
@@ -42,7 +42,7 @@ function process_generators_storages!(
 
     n_batts = nrow(plexosbatteries)
     n_stors_genstors = nrow(stors_genstors)
-    n_periods = read(attrs(prasfile)["timestep_count"])
+    n_periods = read(attributes(prasfile)["timestep_count"])
 
     if n_stors_genstors > 0 # Load storage and genstorage data
 
@@ -207,7 +207,7 @@ function process_generators_storages!(
         # write results to prasfile
 
         if stor_idx > 0 || n_batts > 0
-            storages = g_create(prasfile, "storages")
+            storages = create_group(prasfile, "storages")
             string_table!(storages, "_core", storages_core, stringlength)
         end
 
@@ -217,65 +217,65 @@ function process_generators_storages!(
 
         if stor_idx > 0 && n_batts > 0
 
-            storages["chargecapacity", "compress", compressionlevel] =
+            storages["chargecapacity", compress=compressionlevel] =
                 vcat(gridwithdrawalcapacity[stor_idxs, :], battery_chargecapacity)
-            storages["dischargecapacity", "compress", compressionlevel] =
+            storages["dischargecapacity", compress=compressionlevel] =
                 vcat(gridinjectioncapacity[stor_idxs, :], battery_dischargecapacity)
-            storages["energycapacity", "compress", compressionlevel] =
+            storages["energycapacity", compress=compressionlevel] =
                 vcat(energycapacity[stor_idxs, :], battery_energycapacity)
 
-            storages["chargeefficiency", "compress", compressionlevel] =
+            storages["chargeefficiency", compress=compressionlevel] =
                 vcat(chargeefficiency[stor_idxs, :], battery_chargeefficiency)
-            storages["dischargeefficiency", "compress", compressionlevel] =
+            storages["dischargeefficiency", compress=compressionlevel] =
                 vcat(dischargeefficiency[stor_idxs, :], battery_dischargeefficiency)
-            storages["carryoverefficiency", "compress", compressionlevel] =
+            storages["carryoverefficiency", compress=compressionlevel] =
                 vcat(carryoverefficiency[stor_idxs, :], battery_carryoverefficiency)
 
-            storages["failureprobability", "compress", compressionlevel] =
+            storages["failureprobability", compress=compressionlevel] =
                 vcat(λ[stor_idxs, :], battery_λ)
-            storages["repairprobability", "compress", compressionlevel] =
+            storages["repairprobability", compress=compressionlevel] =
                 vcat(μ[stor_idxs, :], battery_μ)
 
         elseif stor_idx > 0
 
-            storages["chargecapacity", "compress", compressionlevel] =
+            storages["chargecapacity", compress=compressionlevel] =
                 gridwithdrawalcapacity[stor_idxs, :]
-            storages["dischargecapacity", "compress", compressionlevel] =
+            storages["dischargecapacity", compress=compressionlevel] =
                 gridinjectioncapacity[stor_idxs, :]
-            storages["energycapacity", "compress", compressionlevel] =
+            storages["energycapacity", compress=compressionlevel] =
                 energycapacity[stor_idxs, :]
 
-            storages["chargeefficiency", "compress", compressionlevel] =
+            storages["chargeefficiency", compress=compressionlevel] =
                 chargeefficiency[stor_idxs, :]
-            storages["dischargeefficiency", "compress", compressionlevel] =
+            storages["dischargeefficiency", compress=compressionlevel] =
                 dischargeefficiency[stor_idxs, :]
-            storages["carryoverefficiency", "compress", compressionlevel] =
+            storages["carryoverefficiency", compress=compressionlevel] =
                 carryoverefficiency[stor_idxs, :]
 
-            storages["failureprobability", "compress", compressionlevel] =
+            storages["failureprobability", compress=compressionlevel] =
                 λ[stor_idxs, :]
-            storages["repairprobability", "compress", compressionlevel] =
+            storages["repairprobability", compress=compressionlevel] =
                 μ[stor_idxs, :]
 
         elseif n_batts > 0
 
-            storages["chargecapacity", "compress", compressionlevel] =
+            storages["chargecapacity", compress=compressionlevel] =
                 battery_chargecapacity
-            storages["dischargecapacity", "compress", compressionlevel] =
+            storages["dischargecapacity", compress=compressionlevel] =
                 battery_dischargecapacity
-            storages["energycapacity", "compress", compressionlevel] =
+            storages["energycapacity", compress=compressionlevel] =
                 battery_energycapacity
 
-            storages["chargeefficiency", "compress", compressionlevel] =
+            storages["chargeefficiency", compress=compressionlevel] =
                 battery_chargeefficiency
-            storages["dischargeefficiency", "compress", compressionlevel] =
+            storages["dischargeefficiency", compress=compressionlevel] =
                 battery_dischargeefficiency
-            storages["carryoverefficiency", "compress", compressionlevel] =
+            storages["carryoverefficiency", compress=compressionlevel] =
                 battery_carryoverefficiency
 
-            storages["failureprobability", "compress", compressionlevel] =
+            storages["failureprobability", compress=compressionlevel] =
                 battery_λ
-            storages["repairprobability", "compress", compressionlevel] =
+            storages["repairprobability", compress=compressionlevel] =
                 battery_μ
 
         end
@@ -284,33 +284,33 @@ function process_generators_storages!(
 
             genstor_idxs = 1:genstor_idx
 
-            generatorstorages = g_create(prasfile, "generatorstorages")
+            generatorstorages = create_group(prasfile, "generatorstorages")
             string_table!(generatorstorages, "_core", generatorstorages_core, stringlength)
 
-            generatorstorages["inflow", "compress", compressionlevel] =
+            generatorstorages["inflow", compress=compressionlevel] =
                 inflow[genstor_idxs, :]
-            generatorstorages["gridwithdrawalcapacity", "compress", compressionlevel] =
+            generatorstorages["gridwithdrawalcapacity", compress=compressionlevel] =
                 gridwithdrawalcapacity[genstor_idxs, :]
-            generatorstorages["gridinjectioncapacity", "compress", compressionlevel] =
+            generatorstorages["gridinjectioncapacity", compress=compressionlevel] =
                 gridinjectioncapacity[genstor_idxs, :]
 
-            generatorstorages["chargecapacity", "compress", compressionlevel] =
+            generatorstorages["chargecapacity", compress=compressionlevel] =
                 gridwithdrawalcapacity[genstor_idxs, :] .+ inflow[genstor_idxs, :]
-            generatorstorages["dischargecapacity", "compress", compressionlevel] =
+            generatorstorages["dischargecapacity", compress=compressionlevel] =
                 gridinjectioncapacity[genstor_idxs, :]
-            generatorstorages["energycapacity", "compress", compressionlevel] =
+            generatorstorages["energycapacity", compress=compressionlevel] =
                 energycapacity[genstor_idxs, :]
 
-            generatorstorages["chargeefficiency", "compress", compressionlevel] =
+            generatorstorages["chargeefficiency", compress=compressionlevel] =
                 chargeefficiency[genstor_idxs, :]
-            generatorstorages["dischargeefficiency", "compress", compressionlevel] =
+            generatorstorages["dischargeefficiency", compress=compressionlevel] =
                 dischargeefficiency[genstor_idxs, :]
-            generatorstorages["carryoverefficiency", "compress", compressionlevel] =
+            generatorstorages["carryoverefficiency", compress=compressionlevel] =
                 carryoverefficiency[genstor_idxs, :]
 
-            generatorstorages["failureprobability", "compress", compressionlevel] =
+            generatorstorages["failureprobability", compress=compressionlevel] =
                 λ[genstor_idxs, :]
-            generatorstorages["repairprobability", "compress", compressionlevel] =
+            generatorstorages["repairprobability", compress=compressionlevel] =
                 μ[genstor_idxs, :]
 
          end
@@ -319,7 +319,7 @@ function process_generators_storages!(
 
 end
 
-function readgenerators(f::HDF5File, excludecategories::Vector{String})
+function readgenerators(f::HDF5.File, excludecategories::Vector{String})
 
     generators = readcompound(
         f["metadata/objects/generators"], [:generator, :generator_category])
@@ -346,12 +346,12 @@ function readgenerators(f::HDF5File, excludecategories::Vector{String})
 
 end
 
-function readreservoirs(f::HDF5File)
+function readreservoirs(f::HDF5.File)
 
     storage_path = "metadata/objects/storages"
     storagerel_path = "metadata/relations/exportinggenerators_headstorage"
 
-    if !exists(f, storage_path) || !exists(f, storagerel_path)
+    if !haskey(f, storage_path) || !haskey(f, storagerel_path)
         return DataFrame(reservoir=String[], reservoir_idx=Int[],
                          reservoir_category=String[], generator=String[])
     end
@@ -369,11 +369,11 @@ function readreservoirs(f::HDF5File)
 
 end
 
-function readbatteries(f::HDF5File)
+function readbatteries(f::HDF5.File)
 
     battery_path = "metadata/objects/batteries"
 
-    if !exists(f, battery_path)
+    if !haskey(f, battery_path)
         return DataFrame(battery=String[], battery_category=String[],
                          region=String[])
     end

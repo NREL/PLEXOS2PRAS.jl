@@ -1,5 +1,5 @@
 function readsingleband(
-    dset::HDF5.HDF5Dataset, resourceidxs::AbstractVector{Int}=Int[])
+    dset::HDF5.Dataset, resourceidxs::AbstractVector{Int}=Int[])
 
     rawdata = read(dset)
     datasize = size(rawdata)
@@ -18,7 +18,7 @@ end
 
 # Read to DataFrame
 
-readcompound(d::HDF5.HDF5Dataset, colnames::Vector{Symbol}=Symbol[]) =
+readcompound(d::HDF5.Dataset, colnames::Vector{Symbol}=Symbol[]) =
     readcompound(read(d), colnames)
 
 function readcompound(
@@ -36,14 +36,14 @@ end
 # Write from DataFrame
 
 function string_table!(
-    f::HDF5Group, tablename::String,
+    f::HDF5.Group, tablename::String,
     data::DataFrame, strlen::Int)
 
     nrows, ncols = size(data)
 
     stringtype_id = HDF5.h5t_copy(HDF5.hdf5_type_id(String))
     HDF5.h5t_set_size(stringtype_id, strlen)
-    stringtype = HDF5.HDF5Datatype(stringtype_id)
+    stringtype = HDF5.Datatype(stringtype_id)
 
     dt_id = HDF5.h5t_create(HDF5.H5T_COMPOUND, ncols * strlen)
     for (i, colname) in enumerate(string.(names(data)))
@@ -54,8 +54,8 @@ function string_table!(
         permutedims(Matrix{String}(data)), strlen)
     )...))
 
-    dset = HDF5.d_create(f, tablename, HDF5.HDF5Datatype(dt_id),
-                    HDF5.dataspace((nrows,)))
+    dset = create_dataset(f, tablename, HDF5.Datatype(dt_id),
+                          HDF5.dataspace((nrows,)))
     HDF5.h5d_write(
         dset, dt_id, HDF5.H5S_ALL, HDF5.H5S_ALL, HDF5.H5P_DEFAULT, rawdata)
 

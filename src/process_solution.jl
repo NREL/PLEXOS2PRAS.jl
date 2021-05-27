@@ -36,8 +36,8 @@ function process_solution(
         error("Exactly one of battery_availabilities, battery_efficiencies " *
               "must be selected as true")
 
-    h5open(inputpath_h5, "r") do plexosfile::HDF5File
-        h5open(outputpath_h5, "w") do prasfile::HDF5File
+    h5open(inputpath_h5, "r") do plexosfile::HDF5.File
+        h5open(outputpath_h5, "w") do prasfile::HDF5.File
 
             process_metadata!(
                 prasfile, plexosfile, timestep, timezone)
@@ -63,30 +63,30 @@ function process_solution(
 end
 
 function process_metadata!(
-    prasfile::HDF5File,
-    plexosfile::HDF5File,
+    prasfile::HDF5.File,
+    plexosfile::HDF5.File,
     timestep::Period,
     timezone::TimeZone)
 
     version_message = "Only H5PLEXOS v0.6 files are supported"
-    if exists(attrs(plexosfile), "h5plexos")
-        version = read(attrs(plexosfile)["h5plexos"])
+    if haskey(attributes(plexosfile), "h5plexos")
+        version = read(attributes(plexosfile)["h5plexos"])
         version_match = match(r"^v0.6.\d+$", version)
         isnothing(version_match) && error(version_message * ", got " * version)
     else
         error(version_message)
     end
 
-    attributes = attrs(prasfile)
+    attrs = attributes(prasfile)
 
-    attributes["pras_dataversion"] = "v0.5.0"
+    attrs["pras_dataversion"] = "v0.6.0"
 
     # TODO: Are other values possible for these units?
-    attributes["power_unit"] = "MW"
-    attributes["energy_unit"] = "MWh"
+    attrs["power_unit"] = "MW"
+    attrs["energy_unit"] = "MWh"
 
     dset = plexosfile["data/ST/interval/regions/Load"]
-    offset = read(attrs(dset)["period_offset"])
+    offset = read(attributes(dset)["period_offset"])
     timestamp_range = offset .+ (1:size(dset, 2))
 
     timestamps_raw = read(plexosfile["metadata/times/interval"])[timestamp_range]
@@ -97,17 +97,17 @@ function process_metadata!(
         error("PLEXOS result timestep durations did not " *
               "all match provided timestep ($timestep)")
 
-    attributes["start_timestamp"] = string(first(timestamps))
-    attributes["timestep_count"] = length(timestamps)
-    attributes["timestep_length"] = timestep.value
-    attributes["timestep_unit"] = unitsymbol(typeof(timestep))
+    attrs["start_timestamp"] = string(first(timestamps))
+    attrs["timestep_count"] = length(timestamps)
+    attrs["timestep_length"] = timestep.value
+    attrs["timestep_unit"] = unitsymbol(typeof(timestep))
 
     return
 
 end
 
 function process_regions!(
-    prasfile::HDF5File, plexosfile::HDF5File,
+    prasfile::HDF5.File, plexosfile::HDF5.File,
     stringlength::Int, compressionlevel::Int)
 
     # Load required data from plexosfile
@@ -117,9 +117,9 @@ function process_regions!(
     n_regions = size(regiondata, 1)
 
     # Save data to prasfile
-    regions = g_create(prasfile, "regions")
+    regions = create_group(prasfile, "regions")
     string_table!(regions, "_core", regiondata[!, [:name]], stringlength)
-    regions["load", "compress", compressionlevel] = round.(UInt32, load)
+    regions["load", compress=compressionlevel] = round.(UInt32, load)
 
     return n_regions
 

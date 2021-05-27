@@ -1,7 +1,7 @@
 name = "PLEXOS2PRAS"
 uuid = "23000632-8e99-4af6-adcc-f1f915ea3706"
 authors = ["Gord Stephen <gord.stephen@nrel.gov>"]
-version = "0.5.3"
+version = "0.5.4"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
@@ -10,10 +10,9 @@ HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 PRAS = "05348d26-1c52-11e9-35e3-9d51842d34b9"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
 XLSX = "fdbf4ff8-1666-58a4-91e7-1b58723a45e0"
-ZipFile = "a5390f91-8eb1-5f08-bee0-b1d1ffed6cea"
 
 [compat]
-PRAS = "0.5"
+PRAS = "0.6"
 
 [extras]
 H5PLEXOS = "30e9bc9d-95c1-474a-9a40-60ab4bafb5d2"
