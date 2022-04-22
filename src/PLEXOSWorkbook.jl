@@ -15,12 +15,12 @@ PLEXOSWorkbook(filename::String) = XLSX.openxlsx(filename) do xf
 end
 
 function writeworkbook(wb::PLEXOSWorkbook, filename::String)
-    println('Objects dataframe:', size(wb.objects, 1))
-    println('Categories dataframe:', size(wb.categories, 1))
-    println('Memberships dataframe:', size(wb.memberships, 1))
-    println('Attributes dataframe:', size(wb.attributes, 1))
-    println('Properties dataframe:', size(wb.properties, 1))
-    println('Reports dataframe:', size(wb.reports, 1))    
+    println("Objects dataframe:", size(wb.objects, 1))
+    println("Categories dataframe:", size(wb.categories, 1))
+    println("Memberships dataframe:", size(wb.memberships, 1))
+    println("Attributes dataframe:", size(wb.attributes, 1))
+    println("Properties dataframe:", size(wb.properties, 1))
+    println("Reports dataframe:", size(wb.reports, 1))    
     XLSX.writetable(filename, overwrite=true,
         Objects=(collect(eachcol(wb.objects)), names(wb.objects)),
         Categories=(collect(eachcol(wb.categories)), names(wb.categories)),
