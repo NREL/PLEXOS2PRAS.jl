@@ -1,7 +1,7 @@
 name = "PLEXOS2PRAS"
 uuid = "23000632-8e99-4af6-adcc-f1f915ea3706"
 authors = ["Gord Stephen <gord.stephen@nrel.gov>"]
-version = "0.5.4"
+version = "0.5.5"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
