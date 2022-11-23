@@ -66,15 +66,6 @@ function process_generators_storages!(
             raw_chargeefficiency =
                 readsingleband(plexosfile["/data/ST/interval/generators/z"]) ./ 100
 
-            any(iszero, raw_chargeefficiency) &&
-                @error "Generator(s) with 0% pump efficiency detected. " *
-                       "This is often a sign that the system includes " *
-                       "discharge-only Generator-Storage pairings that are " *
-                       "not being represented correctly by PLEXOS2PRAS. " *
-                       "Consider running `process_workbook` and " *
-                       "`process_solution` with `pump_capacities=true` " *
-                       "and `pump_efficiencies=false` instead."
-
         end
 
         raw_inflows =
@@ -145,6 +136,19 @@ function process_generators_storages!(
                 minimum(raw_chargeefficiency[gen_idxs, :], dims=1)
             carryoverefficiency[idx, :] =
                 minimum(raw_carryoverefficiency[res_idxs, :], dims=1)
+
+            any(iszero, chargeefficiency[idx, :]) &&
+                @error "$(row.storage) has a 0% charge efficiency. " *
+                       "This is often a sign that the unit represents " *
+                       "discharge-only Generator-Storage pairings that are " *
+                       "not being represented correctly by PLEXOS2PRAS. " *
+                       "Consider running `process_workbook` and " *
+                       "`process_solution` with `pump_capacities=true` " *
+                       "and `pump_efficiencies=false` instead." *
+                       "Alternatively, if this is expected, set the unit's " *
+                       "charge capacity to zero (instead of setting " *
+                       "charge efficiency to zero) to avoid triggering " *
+                       "this error."
 
             # Just take largest FOR and MTTR out of all associated generators
             # as the device's FOR and MTTR
