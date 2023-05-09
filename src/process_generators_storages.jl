@@ -77,8 +77,11 @@ function process_generators_storages!(
 
         end
 
-        raw_inflows =
-            readsingleband(plexosfile["/data/ST/interval/storages/Natural Inflow"])
+        if haskey(plexosfile, "/data/ST/interval/storages/Natural Inflow") 
+            raw_inflows = readsingleband(plexosfile["/data/ST/interval/storages/Natural Inflow"])
+        else
+            raw_inflows = zeros(size(raw_chargeefficiency))
+        end
         raw_decayrate =
             readsingleband(plexosfile["/data/ST/interval/storages/x"]) ./ 100
         raw_carryoverefficiency =
