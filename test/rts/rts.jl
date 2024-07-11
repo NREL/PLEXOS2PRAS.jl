@@ -7,7 +7,7 @@
         xlsx_in = testpath * "rts_PLEXOS.xlsx"
         xlsx_out = testpath * "rts_PLEXOS_PRAS.xlsx"
         process_workbook(xlsx_in, xlsx_out,
-            charge_capacities=true, charge_efficiencies=false)
+            pump_capacities=true, pump_efficiencies=false)
 
     end
 
@@ -22,11 +22,11 @@
 
         process_solution(h5file, prasfile_lines, # hdf5 -> pras
             exclude_categories=["Sync Cond"],
-            charge_capacities=true, charge_efficiencies=false)
+            pump_capacities=true, pump_efficiencies=false)
 
         process_solution(h5file, prasfile_interfaces, # hdf5 -> pras
             exclude_categories=["Sync Cond"], use_interfaces=true,
-            charge_capacities=true, charge_efficiencies=false)
+            pump_capacities=true, pump_efficiencies=false)
 
         # Note that the "correct" battery charge efficiency should actually be
         # 0.85, not 1.0 as suggested below. But given PLEXOS' limit of three
