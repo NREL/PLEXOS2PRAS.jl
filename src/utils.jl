@@ -41,13 +41,13 @@ function string_table!(
 
     nrows, ncols = size(data)
 
-    stringtype_id = HDF5.h5t_copy(HDF5.hdf5_type_id(String))
-    HDF5.h5t_set_size(stringtype_id, strlen)
+    stringtype_id = HDF5.API.h5t_copy(HDF5.hdf5_type_id(String))
+    HDF5.API.h5t_set_size(stringtype_id, strlen)
     stringtype = HDF5.Datatype(stringtype_id)
 
-    dt_id = HDF5.h5t_create(HDF5.H5T_COMPOUND, ncols * strlen)
+    dt_id = HDF5.API.h5t_create(HDF5.API.H5T_COMPOUND, ncols * strlen)
     for (i, colname) in enumerate(string.(names(data)))
-        HDF5.h5t_insert(dt_id, colname, (i-1)*strlen, stringtype)
+        HDF5.API.h5t_insert(dt_id, colname, (i-1)*strlen, stringtype)
     end
 
     rawdata = UInt8.(vcat(vec(convertstring.(
@@ -56,8 +56,8 @@ function string_table!(
 
     dset = create_dataset(f, tablename, HDF5.Datatype(dt_id),
                           HDF5.dataspace((nrows,)))
-    HDF5.h5d_write(
-        dset, dt_id, HDF5.H5S_ALL, HDF5.H5S_ALL, HDF5.H5P_DEFAULT, rawdata)
+    HDF5.API.h5d_write(
+        dset, dt_id, HDF5.API.H5S_ALL, HDF5.API.H5S_ALL, HDF5.API.H5P_DEFAULT, rawdata)
 
     return
 
