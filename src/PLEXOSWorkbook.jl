@@ -9,7 +9,7 @@ end
 
 PLEXOSWorkbook(filename::String) = XLSX.openxlsx(filename) do xf
     return PLEXOSWorkbook(
-        map(sheet -> DataFrame(XLSX.gettable(xf[sheet])...),
+        map(sheet -> DataFrame(XLSX.gettable(xf[sheet])),
         ["Objects", "Categories", "Memberships",
          "Attributes","Properties", "Reports"])...)
 end
